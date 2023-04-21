@@ -5,8 +5,11 @@ import time
 import re
 import sys
 
-# Global variables
+# Default values
 formatting_line = "-" * 45  # Formatting line = -----------------------------
+default_server_save_path = "server_files"  # Path to the folder where received files are stored
+default_ip = "127.0.0.1"
+default_port = 8088
 
 
 # Description:
@@ -17,18 +20,6 @@ formatting_line = "-" * 45  # Formatting line = -----------------------------
 #   nothing, it prints the error message with red color and "Error" to standard error output
 def print_error(error_message):
     print(f"\033[1;31;1mError: \n\t{error_message}\n\033[0m", file=sys.stderr)
-
-
-# Description:
-#   Prints a formatting line and which port a server is listening on.
-# Parameters:
-#   listening_port: holds the port number the server is listening from input parameters set by the user
-# Returns:
-#   nothing, it prints the formatting line and the port number
-def print_server_listening_port(listening_port):
-    print(formatting_line)
-    print(f"A simpleperf server is listening on port {listening_port}")
-    print(formatting_line)
 
 
 # Description:
@@ -135,25 +126,43 @@ def check_ipaddress(ip):
 
 
 # Description:
-#   checks if number of bytes to send is in the correct format using regex
-#   It checks if the string starts with a number and ends with B, KB or MB
+#   Checks if a path exists
 # Parameters:
-#   number of bytes (nbytes) holds the number of bytes to send with the unit i.e. 1B, 1KB, 1MB
+#   the path: holds the path
 # Returns:
-#   a string if its valid, else it will exit the program with an error message
-def check_nbytes(nbytes):
-    # Check if string starts with number and ends with B, KB or MB.
-    check = re.compile(r"^[0-9]+(B|KB|MB)$")  # Format required i.e. 1B, 1KB, 1MB
+#   Returns the path if it exists, else it will exit the program with an error message
+def check_save_path(path):
+    # Default error message message
+    error_message = None
     try:
-        # Check if the string is valid and raise an error if it is not
-        if not check.match(nbytes):
-            raise ValueError
+        if not os.path.isdir(path):  # Check if the path is a directory
+            error_message = f"{path} is not a valid save path"  # Set error_message message
+            raise ValueError  # Raise error_message
     except ValueError:
-        print_error(f"Invalid numbers to send must end with B, KB or MB. {nbytes} is not recognized")
+        print_error(error_message)  # Print using standard error_message message function
         parser.print_help()
         exit(1)  # Exit the program
-    # Return the string if it is valid
-    return nbytes
+    return path  # Return the path if it exists
+
+
+# Description:
+#   Checks if a file exists
+# Parameters:
+#   file: holds the file name
+# Returns:
+#   Returns the file name if it exists, else it will exit the program with an error message
+def check_file(file):
+    # Default error message message
+    error_message = None
+    try:
+        if not os.path.isfile(file):  # Check if the file exists
+            error_message = f"{file} does not exist"  # Set error_message message
+            raise ValueError
+    except ValueError:
+        print_error(error_message)  # Print using standard error_message message function
+        parser.print_help()
+        exit(1)  # Exit the program
+    return file  # Return the file name if it exists
 
 
 # Add description and epilog to the parser, this is for prettier help text
@@ -169,13 +178,19 @@ default_port = 8088
 # Client only arguments
 client_group = parser.add_argument_group('client')  # Create a group for the client arguments, for the help text
 client_group.add_argument('-c', '--client', action="store_true", help="Start in client mode")
-client_group.add_argument('-I', '--serverip', type=check_ipaddress, default=default_ip,
-                          help="Server ip address to connect to, in dotted decimal notation. Default %(default)s")
+client_group.add_argument('-f', '--file', type=check_file, help="File to send to the server")
+client_group.add_argument('-i', '--serverip', type=check_ipaddress, default=default_ip,
+                          help="IP address to connect/bind to, in dotted decimal notation. Default %(default)s")
+
 # Server only arguments
 server_group = parser.add_argument_group('server')  # Create a group for the server arguments, for the help text
 server_group.add_argument('-s', '--server', action="store_true", help="Start in server mode")
-server_group.add_argument('-b', '--bind', type=check_ipaddress, default=default_ip,
+server_group.add_argument('-a', '--bind', type=check_ipaddress, default=default_ip,
                           help="Bind the server to a specific ip address, in dotted decimal notation. Default %("
+                               "default)s")
+
+server_group.add_argument('-sp', '--server_save_path', type=check_save_path, default=default_server_save_path,
+                          help="Path to save items. Default %("
                                "default)s")
 
 # Common arguments
@@ -186,12 +201,99 @@ parser.add_argument('-p', '--port', type=check_port, default=default_port,
 args = parser.parse_args()
 
 
-def start_server():
+# Description:
+#  Handles a client connection, receives a file from the client and saves it to the save path folder
+# Parameters:
+#   sock: holds the socket
+#   save_path: holds the save path
+# Returns:
+#   None
+def server_handle_client(sock, save_path):
+    # Receive filename and filesize (this is supposed to be the header)
+    data, address = sock.recvfrom(1024)
+    filename, filesize = data.decode().split(':')  # Extract filename and filesize
+    filesize = int(filesize)
+    basename = os.path.basename(filename)  # Extract filename from the path
+    i = 1  # Counter for duplicate filenames
+
+    # Check if a file exists on the server (in the save path folder) and add a number to the end if it does
+    while os.path.exists(os.path.join(save_path, basename)):
+        # Split the filename and add a number to the end
+        basename = f"{os.path.splitext(basename)[0]}_{i}{os.path.splitext(basename)[1]}"
+        i += 1
+    print(f'Receiving file {basename}')
+
+    received_bytes = 0  # Counter for received bytes
+
+    # Fjern kommentarer for å lagre til fil, dette er kun for testing
+    # with open(os.path.join(save_path, basename), 'wb') as f:
+    while received_bytes < filesize:
+        # Receive data
+        data, address = sock.recvfrom(1024)
+        print(data.decode())
+        # Fjern kommentarer for å lagre til fil, dette er kun for testing
+        # f.write(data) # Write data to file
+        received_bytes += len(data)
+
+
+# Description:
+#   Starts the server
+# Parameters:
+#   ip: holds the ip address
+#   port: holds the port
+#   save_path: holds the save path
+# Returns:
+#   None
+def start_server(ip, port, save_path):
     print("Starting server")
+    try:
+        # Set up socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((ip, port))
+        print(f"Server started on {ip}:{port}")
+        while True:
+            # threading.Thread(target=handle_client, args=(sock,)).start()
+            server_handle_client(sock, save_path)
 
 
-def start_client():
+    except socket.error as e:
+        print(f"Socket error: {e}")
+        exit(1)
+
+
+# Description:
+#   Starts the client
+# Parameters:
+#   ip: holds the ip address
+#   port: holds the port
+#   filename: holds the filename
+# Returns:
+#   None,
+def start_client(ip, port, filename):
     print("Starting client")
+    try:
+        # Create a socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        # Get the size of the file
+        filesize = os.path.getsize(filename)
+
+        # Send file name and size (this should be the header)
+        sock.sendto(f"{filename}:{filesize}".encode(), (ip, port))
+
+        # Open the file and send it in chunks of 1024 bytes
+        with open(filename, 'rb') as f:
+            # Loop until the end of the file
+            while True:
+                data = f.read(1024)
+                print(data.decode())  # Print the data we have read from the file
+                if not data:
+                    break
+                # Send the data we have read
+                sock.sendto(data, (ip, port))
+    except socket.error as e:
+        print(f"Socket error: {e}")
+        exit(1)
 
 
 # Startet med arparse. Det er fortsatt ikke helt opplagt hva flaggene er, men jeg antar at -m og -r er de samme greiene.
@@ -206,12 +308,11 @@ def main():
     parser.add_argument("-t", type=str, choices=["loss", "skipack"], help="Choose your test mode")
     parser.add_argument("-p", type=int, help="Port number")
 
-    args = parser.parse_args()
 
+    args = parser.parse_args()
     if args.c and args.s:
         print("Cannot run as both client and server!")
         sys.exit(1)
-
     if args.c:
         run_client(args.port, args.f, args.r, args.t)
     elif args.s:
@@ -220,5 +321,17 @@ def main():
         print("Error, you must select server or client mode!")
         sys.exit(1)
 
+    if args.server:
+        start_server()
+        # End of server mode
+
+    if args.client:
+        start_client()
+        # End of client mode
+
+
+
+
+# Start the main function
 if __name__ == "__main__":
     main()
