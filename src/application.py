@@ -194,22 +194,31 @@ def start_client():
     print("Starting client")
 
 
+# Startet med arparse. Det er fortsatt ikke helt opplagt hva flaggene er, men jeg antar at -m og -r er de samme greiene.
+# -m flagget: server og -r flagget: client
 def main():
-    # Check if server and client are both set, or none of them
-    if (args.server and args.client) or (not args.server and not args.client):
-        print_error("You must run either in server or client mode")
-        parser.print_help()
-        exit(1)
+    parser = argparse.ArgumentParser(description="DRTP file transfer application script")
+    parser.add_argument("-c", action="store_true", help="Run in client mode")
+    parser.add_argument("-s", action="store_true", help="Run in server mode")
+    parser.add_argument("-f", type=str, help="Name of the file")
+    parser.add_argument("-m", type=str, choices=["stop_and_wait", "gbn", "sr"], help="Choose Reliability mode in the Server")
+    parser.add_argument("-r", type=str, choices=["stop_and_wait", "gbn", "sr"], default="stop_and_wait", help="Choose Reliability mode in the Client")
+    parser.add_argument("-t", type=str, choices=["loss", "skipack"], help="Choose your test mode")
+    parser.add_argument("-p", type=int, help="Port number")
 
-    if args.server:
-        start_server()
-        # End of server mode
+    args = parser.parse_args()
 
-    if args.client:
-        start_client()
-        # End of client mode
+    if args.c and args.s:
+        print("Cannot run as both client and server!")
+        sys.exit(1)
 
+    if args.c:
+        run_client(args.port, args.f, args.r, args.t)
+    elif args.s:
+        run_server(args.port, args.f, args.m, args.t)
+    else:
+        print("Error, you must select server or client mode!")
+        sys.exit(1)
 
-# Start the main function
 if __name__ == "__main__":
     main()
