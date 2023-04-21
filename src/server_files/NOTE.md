@@ -1,0 +1,1 @@
+# Denne filen er for at mappen blir lagret på github, kan fjeners om implimentert riktig
