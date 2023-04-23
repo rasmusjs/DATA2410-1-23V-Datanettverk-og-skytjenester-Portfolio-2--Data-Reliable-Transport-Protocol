@@ -24,6 +24,38 @@ def print_error(error_message):
     print(f"\033[1;31;1mError: \n\t{error_message}\n\033[0m", file=sys.stderr)
 
 
+# Description:
+#  Function for parsing the flags
+# Parameters:
+#   flags: holds the flags
+# Returns:
+#   Returns the flags as a tuple
+def parse_flags(flags):
+    syn = flags & (1 << 3)  # 1 << 3 = 1000
+    ack = flags & (1 << 2)  # 1 << 2 = 0100
+    fin = flags & (1 << 1)  # 1 << 1 = 0010
+    rst = flags & (1 << 0)  # 1 << 0 = 0001
+    return syn, ack, fin, rst
+
+
+def set_flags(syn, ack, fin, rst):
+    flags = 0
+    if syn:
+        flags |= (1 << 3)
+    if ack:
+        flags |= (1 << 2)
+    if fin:
+        flags |= (1 << 1)
+    if rst:
+        flags |= (1 << 0)
+    return flags
+
+
+# test = set_flags(1, 0, 0, 0)
+# print(parse_flags(test))
+# print(parse_flags(0b1000))
+# print(parse_flags(0b1100))
+
 # Define the structure of the headed
 # L = 32 bits, H = 16 bits
 # Sequence Number:32 bits, Acknowledgment Number:32, Flags:16 ,Window:16
@@ -55,9 +87,6 @@ def parse_header(header):
     return protocol_struct.unpack(header)
 
 
-print(parse_header(create_header(1234, 5678, 1, 1)))
-
-
 # Description:
 #  Handles a client connection, receives a file from the client and saves it to the save path folder
 # Parameters:
@@ -66,6 +95,8 @@ print(parse_header(create_header(1234, 5678, 1, 1)))
 # Returns:
 #   None
 def server_handle_client(sock, save_path):
+    pass
+    """
     # Receive filename and filesize (this is supposed to be the header)
     data, address = sock.recvfrom(1024)
     filename, filesize = data.decode().split(':')  # Extract filename and filesize
@@ -90,7 +121,7 @@ def server_handle_client(sock, save_path):
         print(data.decode())
         # Fjern kommentarer for å lagre til fil, dette er kun for testing
         # f.write(data) # Write data to file
-        received_bytes += len(data)
+        received_bytes += len(data)"""
 
 
 # Description:
@@ -102,7 +133,8 @@ def server_handle_client(sock, save_path):
 # Returns:
 #   None
 def start_server(ip, port, save_path):
-    print("Starting server")
+    pass
+    """print("Starting server")
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -110,11 +142,18 @@ def start_server(ip, port, save_path):
         print(f"Server started on {ip}:{port}")
         while True:
             # threading.Thread(target=handle_client, args=(sock,)).start()
-            server_handle_client(sock, save_path)
+            # server_handle_client(sock, save_path)
+            data, address = sock.recvfrom(1024)
+            print(data.decode())
+
+
+    except KeyboardInterrupt:
+        print("Server shutting down")
+        exit(0)
 
     except socket.error as e:
         print(f"Socket error: {e}")
-        exit(1)
+        exit(1)"""
 
 
 # Description:
@@ -126,7 +165,8 @@ def start_server(ip, port, save_path):
 # Returns:
 #   None,
 def start_client(ip, port, filename):
-    print("Starting client")
+    pass
+    """print("Starting client")
     try:
         # Create a socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -136,7 +176,6 @@ def start_client(ip, port, filename):
 
         # Send file name and size (this should be the header)
         sock.sendto(f"{filename}:{filesize}".encode(), (ip, port))
-
         # Open the file and send it in chunks of 1024 bytes
         with open(filename, 'rb') as f:
             # Loop until the end of the file
@@ -147,6 +186,88 @@ def start_client(ip, port, filename):
                     break
                 # Send the data we have read
                 sock.sendto(data, (ip, port))
+    except socket.error as e:
+        print(f"Socket error: {e}")
+        exit(1)"""
+
+
+def three_way_handshake_client(sock, address):
+    # Create a header with the syn flag set
+    packet = create_header(1, 0, set_flags(1, 0, 0, 0), 1)
+    # Send the packet
+    sock.sendto(packet, address)
+    # Receive the response
+    data, address = sock.recvfrom(1024)
+    # Parse the header
+    sequence_number, acknowledgment_number, flags, window = parse_header(data)
+    print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {window}")
+    # Check if the syn and ack flags are set
+    syn, ack, fin, rst = parse_flags(flags)
+    print(f"Received: {syn}, {ack}, {fin}, {rst}")
+    if syn and ack:
+        # Create a header with the ack flag set
+        packet = create_header(1, 1, set_flags(0, 1, 0, 0), 1)
+        # Send the packet
+        sock.sendto(packet, address)
+        return True
+
+
+def run_client(port, file, reliability, mode):
+    ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
+    try:
+        # Set up socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((ip, port))
+        print(f"Client started on {port}")
+        # Start the three-way handshake
+        if three_way_handshake_client(sock, (serverip, serverport)):
+            print("Connection established")
+
+        while True:
+            data, address = sock.recvfrom(1024)
+            print(data.decode())
+
+            # Send filen eller noe?
+
+    except KeyboardInterrupt:
+        print("Client shutting down")
+        exit(0)
+
+    except socket.error as e:
+        print(f"Socket error: {e}")
+        exit(1)
+
+
+def run_server(port, file, reliability, mode):
+    ip, port, clientip, clientport = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
+    try:
+        # Set up socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((ip, port))
+        print(f"Server started on {port}")
+
+        while True:
+            # Receive the response
+            data, address = sock.recvfrom(1024)
+            # Parse the header
+            sequence_number, acknowledgment_number, flags, window = parse_header(data)
+            # Check if the syn and ack flags are set
+            syn, ack, fin, rst = parse_flags(flags)
+            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {window}")
+            print(f"Received: {syn}, {ack}, {fin}, {rst}")
+            if syn:
+                # Create a header with the syn flag set
+                packet = create_header(1, 1, set_flags(1, 1, 0, 0), 1)
+                sock.sendto(packet, address)
+                print("Sent syn and ack")
+            elif ack:
+                print("Connection established")
+                break
+        # Kjør kode eller noe
+    except KeyboardInterrupt:
+        print("Server shutting down")
+        exit(0)
+
     except socket.error as e:
         print(f"Socket error: {e}")
         exit(1)
@@ -221,7 +342,8 @@ def main():
         try:
             # Check if we have 4 elements in the list i.e. 3 dots
             if len(ip_split) != 4:
-                error_message = f"{ip} is not a valid ip. IPs must be in IPv4 format i.e in dotted decimal notation X.X.X.X"
+                error_message = f"{ip} is not a valid ip. IPs must be in IPv4 format i.e in dotted decimal notation " \
+                                f"X.X.X.X"
                 raise ValueError
 
             # Check if numbers are in range 0-255 and convert i.e. 01 to 1
@@ -328,11 +450,9 @@ def main():
         print_error("Cannot run as both client and server!")
         sys.exit(1)
     if args.client:
-        print("Client mode")
-        # run_client(args.port, args.f, args.r, args.t)
+        run_client(args.port, args.file, args.reliability, args.mode)
     elif args.server:
-        print("Server mode")
-        # run_server(args.port, args.f, args.m, args.t)
+        run_server(args.port, args.file, args.reliability, args.mode)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
