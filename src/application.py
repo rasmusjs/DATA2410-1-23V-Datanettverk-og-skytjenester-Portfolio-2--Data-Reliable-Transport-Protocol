@@ -278,6 +278,31 @@ def three_way_handshake(sock, serverip, serverport):
         exit(1)"""
 
 
+def stop_and_wait(sock, address, file):
+    pass
+    # 1. A stop and wait protocol (stop_and_wait()): The sender sends a packet, then waits for an ack confirming that
+    # packet. If an ack is arrived, it sends a new packet. If an ack does not arrive, it waits for timeout (fixed
+    # value: 500ms, use socket.settimeout) and then resends the packet. If the sender receives a NAK, it resends the
+    # packet.
+
+
+def GBN(sock, address, file):
+    pass
+    # Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
+    # data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on. If
+    # no ACK packet is received within a given timeout (choose a default value: 500ms, use socket.settimeout()
+    # function), all packets that have not previously been acknowledged are assumed to be lost, and they are
+    # retransmitted. A receiver passes on data in order, and if packets arrive at the receiver in the wrong order,
+    # this indicates packet loss or reordering in the network. The DRTP receiver should in such cases not acknowledge
+    #  anything and may discard these packets.
+
+
+def SR(sock, address, file):
+    pass
+    # Selective-Repeat (SR()): Rather than throwing away packets that arrive in the wrong order, put the packets in
+    # the correct place in the receive buffer. Combine both GBN and SR to optimise the performance.
+
+
 def run_client(port, file, reliability, mode):
     ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
     try:
@@ -560,6 +585,9 @@ def main():
     client_group.add_argument('-a', '--serverip', type=check_ipaddress, default=default_ip,
                               help="Bind the server to a specific ip address, in dotted decimal notation. Default %("
                                    "default)s")
+    client_group.add_argument('-m', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
+                              help="Choose reliability mode for client")
+    client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skipack"], help="Choose your test mode")
 
     # Server only arguments
     server_group = parser.add_argument_group('Server')  # Create a group for the server arguments, for the help text
@@ -568,11 +596,9 @@ def main():
                               help="IP address to connect/bind to, in dotted decimal notation. Default %(default)s")
     server_group.add_argument('-sp', '--server_save_path', type=check_save_path, default=default_server_save_path,
                               help="Path to save items. Default %(""default)s")
-    # DRTP arguments
-    drtp_group = parser.add_argument_group('Protocol')  # Create a group for the DRTP arguments, for the help text
-    drtp_group.add_argument('-r', '--reliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
-                            help="Choose Reliability mode")
-    drtp_group.add_argument('-t', '--mode', type=str, choices=["loss", "skipack"], help="Choose your test mode")
+
+    server_group.add_argument('-m', '--sreliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
+                              help="Choose reliability mode for server")
 
     # Common arguments
     parser.add_argument('-p', '--port', type=check_port, default=default_port,
