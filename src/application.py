@@ -1,4 +1,5 @@
 import argparse
+import random
 import socket
 import threading
 import time
@@ -38,16 +39,26 @@ def parse_flags(flags):
     return syn, ack, fin, rst
 
 
+# Description:
+#  Function for setting the flags
+# Parameters:
+#   syn: holds the syn flag
+#   ack: holds the ack flag
+#   fin: holds the fin flag
+#   rst: holds the rst flag
+# Returns:
+#   Returns the flags as an integer (byte), for example,
+#   if we have syn = 1, ack = 1, fin = 0, rst = 0 then the function returns 12
 def set_flags(syn, ack, fin, rst):
     flags = 0
     if syn:
-        flags |= (1 << 3)
+        flags |= (1 << 3)  # 1 << 3 = 1000
     if ack:
-        flags |= (1 << 2)
+        flags |= (1 << 2)  # 1 << 2 = 0100
     if fin:
-        flags |= (1 << 1)
+        flags |= (1 << 1)  # 1 << 1 = 0010
     if rst:
-        flags |= (1 << 0)
+        flags |= (1 << 0)  # 1 << 0 = 0001
     return flags
 
 
@@ -85,6 +96,15 @@ def create_header(sequence_number, acknowledgment_number, flags, window):
 #   Returns the header as a tuple
 def parse_header(header):
     return protocol_struct.unpack(header)
+
+
+def pretty_flags(flags):
+    syn, ack, fin, rst = parse_flags(flags)
+    if syn != 0 or ack != 0 or fin != 0 or rst != 0:
+        print(
+            f"Flags: {'syn' if syn else ''}{'ack' if ack else ''}{'fin' if fin else ''}{'rst' if rst else ''}")
+    else:
+        print("Flags: 0")
 
 
 # Description:
@@ -191,25 +211,71 @@ def start_client(ip, port, filename):
         exit(1)"""
 
 
-def three_way_handshake_client(sock, address):
-    # Create a header with the syn flag set
-    packet = create_header(1, 0, set_flags(1, 0, 0, 0), 1)
-    # Send the packet
-    sock.sendto(packet, address)
-    # Receive the response
-    data, address = sock.recvfrom(1024)
+# Description:
+#   Create a random initial sequence number for the three-way handshake
+# Parameters:
+#   None
+# Returns:
+#   Returns a random initial sequence number as an integer
+def random_isn():
+    return random.randint(0, 2 ** 32 - 1)
+
+
+def three_way_handshake(sock, serverip, serverport):
+    pass
+    """
+    # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
+    address = (serverip, serverport)
+    # Random Initial Sequence Number
+    sequence_number = random_isn()
+    # Flags for syn
+    flags = set_flags(1, 0, 0, 0)
+    # Create the header
+    header = create_header(sequence_number, 0, flags, 1024)
+    # Send the header
+    sock.sendto(header, address)
+    # Receive the header
+    header, address = sock.recvfrom(1024)
     # Parse the header
-    sequence_number, acknowledgment_number, flags, window = parse_header(data)
-    print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {window}")
-    # Check if the syn and ack flags are set
+    sequence_number, acknowledgment_number, flags, window = parse_header(header)
+    # Check if the acknowledgment number is correct
+    if acknowledgment_number != sequence_number + 1:
+        print("Error: Incorrect acknowledgment number")
+        exit(1)
+    # Check if the flags are correct
     syn, ack, fin, rst = parse_flags(flags)
-    print(f"Received: {syn}, {ack}, {fin}, {rst}")
-    if syn and ack:
-        # Create a header with the ack flag set
-        packet = create_header(1, 1, set_flags(0, 1, 0, 0), 1)
-        # Send the packet
-        sock.sendto(packet, address)
-        return True
+    if syn != 1 or ack != 1 or fin != 0 or rst != 0:
+        print("Error: Incorrect flags")
+        exit(1)
+    # Check if the sequence number is correct
+    if sequence_number != 0:
+        print("Error: Incorrect sequence number")
+        exit(1)
+    # Check if the window is correct
+    if window != 1024:
+        print("Error: Incorrect window")
+        exit(1)
+    # Set the acknowledgment number to the sequence number + 1
+    acknowledgment_number = sequence_number + 1
+    # Set the flags to ack
+    flags = set_flags(0, 1, 0, 0)
+    # Create the header
+    header = create_header(sequence_number, acknowledgment_number, flags, 1024)
+    # Send the header
+    sock.sendto(header, address)
+    # Receive the header
+    header, address = sock.recvfrom(1024)
+    # Parse the header
+    sequence_number, acknowledgment_number, flags, window = parse_header(header)
+    # Check if the acknowledgment number is correct
+    if acknowledgment_number != sequence_number + 1:
+        print("Error: Incorrect acknowledgment number")
+        exit(1)
+    # Check if the flags are correct
+    syn, ack, fin, rst = parse_flags(flags)
+    if syn != 0 or ack != 1 or fin != 0 or rst != 0:
+        print("Error: Incorrect flags")
+        exit(1)"""
 
 
 def run_client(port, file, reliability, mode):
@@ -219,15 +285,56 @@ def run_client(port, file, reliability, mode):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((ip, port))
         print(f"Client started on {port}")
-        # Start the three-way handshake
-        if three_way_handshake_client(sock, (serverip, serverport)):
-            print("Connection established")
+        # Keep track of the sequence number, acknowledgment number, flags and receiver window
+        sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 1024
+
+        # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
+        while True:
+            address = (serverip, serverport)
+            # Random Initial Sequence Number
+            sequence_number = random_isn()
+            # Flags for syn
+            flags = set_flags(1, 0, 0, 0)
+            # Receive window
+            receiver_window = 1024
+            # Create a header with the syn flag set
+            packet = create_header(sequence_number, 0, flags, receiver_window)
+
+            # Send the packet
+            sock.sendto(packet, address)
+
+            # Receive the response
+            data, address = sock.recvfrom(receiver_window)
+            # Parse the header
+            sequence_number, acknowledgment_number, flags, receive_window = parse_header(data)
+            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receive_window}")
+            syn, ack, fin, rst = parse_flags(flags)
+            pretty_flags(flags)
+            # Check if the syn and ack flags are set
+            if syn and ack:
+                """
+                # Increment the acknowledgment number by 1 to acknowledge the syn
+                acknowledgment_number = sequence_number + 1
+                # Increment the sequence number by 1 to acknowledge the synack
+                sequence_number += 1
+                print("New sequence number: ", sequence_number)
+                print("New acknowledgment number: ", acknowledgment_number)
+                """
+                # Flags for ack
+                flags = set_flags(0, 1, 0, 0)
+                # Create a header with the ack flag set
+                packet = create_header(sequence_number, acknowledgment_number, flags, receive_window)
+                # Send the packet
+                sock.sendto(packet, address)
+                break
+            # Kjør kode eller noe her
 
         while True:
-            data, address = sock.recvfrom(1024)
+            packet = create_header(sequence_number, acknowledgment_number, flags, receive_window)
+            data = packet + "Hello World".encode()
+            sock.sendto(data, address)
+            data, address = sock.recvfrom(receiver_window)
             print(data.decode())
-
-            # Send filen eller noe?
 
     except KeyboardInterrupt:
         print("Client shutting down")
@@ -240,30 +347,58 @@ def run_client(port, file, reliability, mode):
 
 def run_server(port, file, reliability, mode):
     ip, port, clientip, clientport = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
+
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((ip, port))
         print(f"Server started on {port}")
 
+        # Keep track of the sequence number, acknowledgment number, flags and receiver window
+        sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 64
+
+        # Three-way handshake based on https://www.ietf.org/rfc/rfc793.txt page 31
         while True:
             # Receive the response
-            data, address = sock.recvfrom(1024)
+            data, address = sock.recvfrom(receiver_window)
             # Parse the header
-            sequence_number, acknowledgment_number, flags, window = parse_header(data)
+            sequence_number, acknowledgment_number, flags, receiver_window = parse_header(data)
             # Check if the syn and ack flags are set
             syn, ack, fin, rst = parse_flags(flags)
-            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {window}")
-            print(f"Received: {syn}, {ack}, {fin}, {rst}")
+            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+            pretty_flags(flags)
+
+            # Overwrite the receiver window to 64
+            receiver_window = 64
             if syn:
-                # Create a header with the syn flag set
-                packet = create_header(1, 1, set_flags(1, 1, 0, 0), 1)
+                # Random Initial Sequence Number
+                sequence_number = random_isn()
+                """
+                # Increment the sequence number by 1 to acknowledge the syn
+                acknowledgment_number = sequence_number + 1
+                """
+                # Flags for syn and ack
+                flags = set_flags(1, 1, 0, 0)
+                # Create a header with the syn and ack flags set
+                packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
+                # Send the packet
                 sock.sendto(packet, address)
-                print("Sent syn and ack")
             elif ack:
                 print("Connection established")
                 break
-        # Kjør kode eller noe
+
+        # Kjør kode eller noe her
+        while True:
+            data, address = sock.recvfrom(receiver_window)
+            # Get header from the packet (first 12 bytes)
+            header = data[:12]
+            # Unpack the header fields
+            sequence_number, acknowledgment_number, flags, receiver_window = parse_header(header)
+            # Keep only the data from the packet (after the header)
+            data = data[12:]
+            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+            print(f"Received data: {data.decode()}")
+
     except KeyboardInterrupt:
         print("Server shutting down")
         exit(0)
