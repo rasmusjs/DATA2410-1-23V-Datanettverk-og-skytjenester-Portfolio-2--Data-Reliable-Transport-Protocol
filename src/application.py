@@ -585,7 +585,7 @@ def main():
     client_group.add_argument('-a', '--serverip', type=check_ipaddress, default=default_ip,
                               help="Bind the server to a specific ip address, in dotted decimal notation. Default %("
                                    "default)s")
-    client_group.add_argument('-m', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
+    client_group.add_argument('-r', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
                               help="Choose reliability mode for client")
     client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skipack"], help="Choose your test mode")
 
@@ -611,9 +611,9 @@ def main():
         print_error("Cannot run as both client and server!")
         sys.exit(1)
     if args.client:
-        run_client(args.port, args.file, args.reliability, args.mode)
+        run_client(args.port, args.file, args.creliability, args.mode)
     elif args.server:
-        run_server(args.port, args.file, args.reliability, args.mode)
+        run_server(args.port, args.file, args.sreliability, args.mode)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
