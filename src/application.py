@@ -101,17 +101,17 @@ def parse_header(header):
 # Description:
 #  Function for stripping the header from the packet
 # Parameters:
-#   data: holds the packet
+#   raw_data: holds the packet
 # Returns:
 #   Returns the header as a tuple
-def strip_header(data):
+def strip_header(raw_data):
     # Get header from the packet (first 12 bytes)
-    header = data[:12]
+    header = raw_data[:12]
     # Unpack the header fields
     sequence_number, acknowledgment_number, flags, receiver_window = parse_header(header)
-    # Keep only the data from the packet (after the header)
-    data = data[12:]
-    # Return the header fields and the data decoded as a tuple
+    # Keep only the raw_data from the packet (after the header)
+    data = raw_data[12:]
+    # Return the header fields and the raw_data decoded as a tuple
     return sequence_number, acknowledgment_number, flags, receiver_window, data.decode()
 
 
@@ -135,8 +135,8 @@ def server_handle_client(sock, save_path):
     pass
     """
     # Receive filename and filesize (this is supposed to be the header)
-    data, address = sock.recvfrom(1024)
-    filename, filesize = data.decode().split(':')  # Extract filename and filesize
+    raw_data, address = sock.recvfrom(1024)
+    filename, filesize = raw_data.decode().split(':')  # Extract filename and filesize
     filesize = int(filesize)
     basename = os.path.basename(filename)  # Extract filename from the path
     i = 1  # Counter for duplicate filenames
@@ -153,12 +153,12 @@ def server_handle_client(sock, save_path):
     # Fjern kommentarer for å lagre til fil, dette er kun for testing
     # with open(os.path.join(save_path, basename), 'wb') as f:
     while received_bytes < filesize:
-        # Receive data
-        data, address = sock.recvfrom(1024)
-        print(data.decode())
+        # Receive raw_data
+        raw_data, address = sock.recvfrom(1024)
+        print(raw_data.decode())
         # Fjern kommentarer for å lagre til fil, dette er kun for testing
-        # f.write(data) # Write data to file
-        received_bytes += len(data)"""
+        # f.write(raw_data) # Write raw_data to file
+        received_bytes += len(raw_data)"""
 
 
 # Description:
@@ -180,8 +180,8 @@ def start_server(ip, port, save_path):
         while True:
             # threading.Thread(target=handle_client, args=(sock,)).start()
             # server_handle_client(sock, save_path)
-            data, address = sock.recvfrom(1024)
-            print(data.decode())
+            raw_data, address = sock.recvfrom(1024)
+            print(raw_data.decode())
 
 
     except KeyboardInterrupt:
@@ -217,12 +217,12 @@ def start_client(ip, port, filename):
         with open(filename, 'rb') as f:
             # Loop until the end of the file
             while True:
-                data = f.read(1024)
-                print(data.decode())  # Print the data we have read from the file
-                if not data:
+                raw_data = f.read(1024)
+                print(raw_data.decode())  # Print the raw_data we have read from the file
+                if not raw_data:
                     break
-                # Send the data we have read
-                sock.sendto(data, (ip, port))
+                # Send the raw_data we have read
+                sock.sendto(raw_data, (ip, port))
     except socket.error as e:
         print(f"Socket error: {e}")
         exit(1)"""
@@ -249,10 +249,10 @@ def stop_and_wait(sock, address, file):
 def GBN(sock, address, file):
     pass
     # Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
-    # data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on. If
+    # raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on. If
     # no ACK packet is received within a given timeout (choose a default value: 500ms, use socket.settimeout()
     # function), all packets that have not previously been acknowledged are assumed to be lost, and they are
-    # retransmitted. A receiver passes on data in order, and if packets arrive at the receiver in the wrong order,
+    # retransmitted. A receiver passes on raw_data in order, and if packets arrive at the receiver in the wrong order,
     # this indicates packet loss or reordering in the network. The DRTP receiver should in such cases not acknowledge
     #  anything and may discard these packets.
 
@@ -301,10 +301,6 @@ def run_client(port, file, reliability, mode):
             syn, ack, fin, rst = parse_flags(flags)
             # Print the flags
             pretty_flags(flags)
-
-            # and acknowledgment_number == sequence_number + 1
-            print("Sequence number: ", sequence_number + 1)
-            print("Acknowledgment number: ", acknowledgment_number)
 
             # Check if the syn and ack flags are set and if the acknowledgment number is equal to
             # the sequence number + 1
@@ -355,16 +351,13 @@ def run_server(port, file, reliability, mode):
         while True:
             # Receive the response
             raw_data, address = sock.recvfrom(receiver_window)
+
             # Parse the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
             # Check if the syn and ack flags are set
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
             pretty_flags(flags)
-
-            # and acknowledgment_number == sequence_number + 1
-            print("New sequence number: ", sequence_number + 1)
-            print("Acknowledgment number: ", acknowledgment_number)
 
             # Overwrite the receiver window to 64
             receiver_window = 64
@@ -382,11 +375,16 @@ def run_server(port, file, reliability, mode):
                 flags = set_flags(1, 1, 0, 0)
                 # Create a header with the syn and ack flags set
                 packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
+
+                print(f"Sending: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+                pretty_flags(flags)
                 # Send the packet
                 sock.sendto(packet, address)
             elif ack and acknowledgment_number == sequence_number_prev + 1:
                 print("Connection established")
                 break
+
+            print("\n")
 
         # Kjør kode eller noe her
         while True:
@@ -394,7 +392,7 @@ def run_server(port, file, reliability, mode):
             # Parse the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
             print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
-            print(f"Received raw_data: {raw_data.decode()}")
+            print(f"Received raw_data: {data}")
 
     except KeyboardInterrupt:
         print("Server shutting down")

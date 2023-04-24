@@ -223,11 +223,11 @@ def server_handle_client(sock, save_path):
     # Fjern kommentarer for å lagre til fil, dette er kun for testing
     # with open(os.path.join(save_path, basename), 'wb') as f:
     while received_bytes < filesize:
-        # Receive data
+        # Receive raw_data
         data, address = sock.recvfrom(1024)
         print(data.decode())
         # Fjern kommentarer for å lagre til fil, dette er kun for testing
-        # f.write(data) # Write data to file
+        # f.write(raw_data) # Write raw_data to file
         received_bytes += len(data)
 
 
@@ -281,10 +281,10 @@ def start_client(ip, port, filename):
             # Loop until the end of the file
             while True:
                 data = f.read(1024)
-                print(data.decode())  # Print the data we have read from the file
+                print(data.decode())  # Print the raw_data we have read from the file
                 if not data:
                     break
-                # Send the data we have read
+                # Send the raw_data we have read
                 sock.sendto(data, (ip, port))
     except socket.error as e:
         print(f"Socket error: {e}")

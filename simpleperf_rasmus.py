@@ -17,12 +17,12 @@ FORMAT_RATE_UNIT = ""  # Format for the rate unit i MB/s or KB/s
 
 
 # Description:
-#   Class for holding the data for each transmission for server and clients
+#   Class for holding the raw_data for each transmission for server and clients
 # Arguments:
 #   ip_port_pair: holds the ip address of the server and the port number used, i.e. 10.0.0.2:5000
-#   elapsed_time: holds the time it took to send the data
-#   interval_bytes: holds the data sent in this interval in bytes, it is used to calculate the rate in given interval
-#   total_bytes: holds the data sent in total.
+#   elapsed_time: holds the time it took to send the raw_data
+#   interval_bytes: holds the raw_data sent in this interval in bytes, it is used to calculate the rate in given interval
+#   total_bytes: holds the raw_data sent in total.
 # Returns:
 #   itself, it is used to create a new object of the transmission instead of using a tuple or printing directly
 class Transmission:
@@ -215,7 +215,7 @@ server_group.add_argument('-b', '--bind', type=check_ipaddress, default=default_
 parser.add_argument('-p', '--port', type=check_port, default=default_port,
                     help="Port to use, default default %(default)s")
 parser.add_argument('-f', '--format', type=str, default=default_print_format, choices=("B", "KB", "MB"),
-                    help="Format to print the data in, default %(default)s")
+                    help="Format to print the raw_data in, default %(default)s")
 
 # Parses the arguments from the user, it calls the check functions to validate the inputs given
 args = parser.parse_args()
@@ -403,7 +403,7 @@ def server_handle_client(c_socket, c_addr):
 #   the function takes no parameters in its signature, but it uses the parameters from argparse
 #   ip: the ip to bind the socket to
 #   port: the port to bind the socket to
-#   format: the format to print the data in i.e B, KB or MB
+#   format: the format to print the raw_data in i.e B, KB or MB
 # Returns:
 #   nothing, it will start an instance the server
 def start_server():
@@ -488,9 +488,9 @@ def client_start_client():
         if args.interval is not None:
             save_interval = time.time() + int(args.interval) + SAVE_OFFSET
 
-        # If the number of bytes is specified, send the data in chunks of 1KB until all the bytes is sent
+        # If the number of bytes is specified, send the raw_data in chunks of 1KB until all the bytes is sent
         if args.num is not None:
-            # Size of the data to send in bytes
+            # Size of the raw_data to send in bytes
             packet_size = 0
 
             # Get the packet size in bytes, and remove the units from the number
@@ -523,14 +523,14 @@ def client_start_client():
                     save_interval = time.time() + int(args.interval) + SAVE_OFFSET
                     transmissions.append(Transmission(ip_port_pair, elapsed_time, interval_sent_data, total_sent))
                     interval_sent_data = 0
-        # Else we send data for a specified time given by the time flag, we
+        # Else we send raw_data for a specified time given by the time flag, we
         else:
             # Set the runtime
             runtime = time.time() + int(args.time)
             # Set the start time to the current time
             start_time = time.time()
             while time.time() <= runtime:
-                # Send the data in chunks of KILOBYTE
+                # Send the raw_data in chunks of KILOBYTE
                 sock.send(b'\x10' * KILOBYTE)
                 total_sent += KILOBYTE
                 # Update the total sent
@@ -553,7 +553,7 @@ def client_start_client():
             elapsed_time = time.time() - start_time
             # Close the socket
             sock.close()
-            # Update the transmission, and set the interval_bytes to 0 since we are done sending data
+            # Update the transmission, and set the interval_bytes to 0 since we are done sending raw_data
             transmissions.append(Transmission(ip_port_pair, elapsed_time, 0, total_sent))
 
     except ConnectionRefusedError:
