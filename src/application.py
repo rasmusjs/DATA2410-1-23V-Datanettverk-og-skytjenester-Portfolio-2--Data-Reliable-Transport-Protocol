@@ -287,7 +287,7 @@ def run_client(port, file, reliability, mode):
 
         # Send the packet
         sock.sendto(packet, address)
-        sequence_number_prev = sequence_number
+        # sequence_number_prev = sequence_number
         acknowledgment_number_prev = acknowledgment_number
         while True:
 
@@ -295,7 +295,7 @@ def run_client(port, file, reliability, mode):
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
-            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+            print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
             # Parse the flags
             syn, ack, fin, rst = parse_flags(flags)
@@ -304,7 +304,7 @@ def run_client(port, file, reliability, mode):
 
             # Check if the syn and ack flags are set and if the acknowledgment number is equal to
             # the sequence number + 1
-            if syn and ack and acknowledgment_number == sequence_number_prev + 1:
+            if syn and ack:
                 # Increment the sequence number by 1 to acknowledge the synack
                 acknowledgment_number = sequence_number + 1
 
@@ -356,7 +356,7 @@ def run_server(port, file, reliability, mode):
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
             # Check if the syn and ack flags are set
             syn, ack, fin, rst = parse_flags(flags)
-            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+            print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             pretty_flags(flags)
 
             # Overwrite the receiver window to 64
@@ -376,7 +376,7 @@ def run_server(port, file, reliability, mode):
                 # Create a header with the syn and ack flags set
                 packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
 
-                print(f"Sending: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+                print(f"Sending: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 pretty_flags(flags)
                 # Send the packet
                 sock.sendto(packet, address)
@@ -391,7 +391,7 @@ def run_server(port, file, reliability, mode):
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
-            print(f"Received: {sequence_number}, {acknowledgment_number}, {flags}, {receiver_window}")
+            print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             print(f"Received raw_data: {data}")
 
     except KeyboardInterrupt:
