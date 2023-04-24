@@ -193,6 +193,10 @@ def start_server(ip, port, save_path):
         exit(1)"""
 
 
+def read_file(filename):
+    return open(filename, 'rb')
+
+
 # Description:
 #   Starts the client
 # Parameters:
@@ -238,12 +242,28 @@ def random_isn():
     return random.randint(0, 2 ** 32 - 1)
 
 
-def stop_and_wait(sock, address, file):
+def stop_and_wait(sock, address, last_acknowledgment_number, file):
     pass
     # A stop and wait protocol (stop_and_wait()): The sender sends a packet, then waits for an ack confirming that
     # packet. If an ack is arrived, it sends a new packet. If an ack does not arrive, it waits for timeout (fixed
     # value: 500ms, use socket.settimeout) and then resends the packet. If the sender receives a NAK, it resends the
     # packet.
+
+    # Forslag til struktur for klienten:
+
+    # Finn legden av filen, bruk os.path.getsize(filename)
+
+    # Finn antall pakker som skal sendes, bruk math.ceil(filesize / window_size)
+
+    # Finn antall bytes som kan sendes, bruk min(window_size, filesize - sent_bytes)
+
+    # Send første pakke med sequence number 0 og ACK number 0
+
+    # Vent på ACK eller NAK i 500ms med socket.settimeout(0.5)
+
+    # Hvis ACK, send neste pakke
+
+    # Hvis NAK, send samme pakke på nytt
 
 
 def GBN(sock, address, file):
