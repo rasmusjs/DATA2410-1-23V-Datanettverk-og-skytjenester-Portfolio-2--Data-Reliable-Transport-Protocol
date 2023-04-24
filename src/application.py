@@ -274,6 +274,9 @@ def run_client(port, file, reliability, mode):
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
 
+        # Keep track of the previous acknowledgment number
+        acknowledgment_number_prev = 0
+
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
 
         address = (serverip, serverport)
@@ -284,13 +287,10 @@ def run_client(port, file, reliability, mode):
         receiver_window = 1024
         # Create a header with the syn flag set
         packet = create_header(sequence_number, 0, flags, receiver_window)
-
         # Send the packet
         sock.sendto(packet, address)
-        # sequence_number_prev = sequence_number
-        acknowledgment_number_prev = acknowledgment_number
-        while True:
 
+        while True:
             # Receive the response
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
@@ -302,12 +302,13 @@ def run_client(port, file, reliability, mode):
             # Print the flags
             pretty_flags(flags)
 
-            # Check if the syn and ack flags are set and if the acknowledgment number is equal to
-            # the sequence number + 1
             if syn and ack:
-                # Increment the sequence number by 1 to acknowledge the synack
+                # Save the acknowledgment number
+                acknowledgment_number_prev = acknowledgment_number
+                # Increment the sequence number by 1 to acknowledge the syn and ack
                 acknowledgment_number = sequence_number + 1
-
+                # Set the sequence number to the acknowledgment number
+                sequence_number = acknowledgment_number_prev
                 # Flags for ack
                 flags = set_flags(0, 1, 0, 0)
                 # Create a header with the ack flag set
@@ -344,8 +345,9 @@ def run_server(port, file, reliability, mode):
 
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 64
-        sequence_number_prev = sequence_number
-        acknowledgment_number_prev = acknowledgment_number
+
+        # Variable to keep track of the previous sequence_number number
+        sequence_number_prev = 0
 
         # Three-way handshake based on https://www.ietf.org/rfc/rfc793.txt page 31
         while True:
@@ -361,30 +363,27 @@ def run_server(port, file, reliability, mode):
 
             # Overwrite the receiver window to 64
             receiver_window = 64
+
+            # Check if the syn flag is set
             if syn:
                 # Increment the acknowledgment number by 1 to acknowledge the syn
                 acknowledgment_number = sequence_number + 1
-
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
-
-                # Save the last sequence number
+                # Save the sequence number
                 sequence_number_prev = sequence_number
-
                 # Flags for syn and ack
                 flags = set_flags(1, 1, 0, 0)
                 # Create a header with the syn and ack flags set
                 packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
-
                 print(f"Sending: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 pretty_flags(flags)
                 # Send the packet
                 sock.sendto(packet, address)
+            # Check if the ack flag is set and if the acknowledgment number is equal to the previous sequence number + 1
             elif ack and acknowledgment_number == sequence_number_prev + 1:
                 print("Connection established")
                 break
-
-            print("\n")
 
         # Kjør kode eller noe her
         while True:
