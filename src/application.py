@@ -71,7 +71,7 @@ def set_flags(syn, ack, fin, rst):
 # L = 32 bits, H = 16 bits
 # Sequence Number:32 bits, Acknowledgment Number:32, Flags:16 ,Window:16
 # From https://docs.python.org/3/library/struct.html
-protocol_struct = struct.Struct("!LLHH")
+protocol_struct = struct.Struct("!IIHH")
 
 
 # Description:
@@ -269,8 +269,8 @@ def stop_and_wait(sock, address, last_acknowledgment_number, file):
 def GBN(sock, address, file):
     pass
     # Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
-    # raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on. If
-    # no ACK packet is received within a given timeout (choose a default value: 500ms, use socket.settimeout()
+    # raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on.
+    # If no ACK packet is received within a given timeout (choose a default value: 500ms, use socket.settimeout()
     # function), all packets that have not previously been acknowledged are assumed to be lost, and they are
     # retransmitted. A receiver passes on raw_data in order, and if packets arrive at the receiver in the wrong order,
     # this indicates packet loss or reordering in the network. The DRTP receiver should in such cases not acknowledge
