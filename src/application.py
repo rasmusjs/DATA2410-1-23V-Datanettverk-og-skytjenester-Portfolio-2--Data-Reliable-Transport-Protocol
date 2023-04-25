@@ -32,10 +32,10 @@ def print_error(error_message):
 # Returns:
 #   Returns the flags as a tuple
 def parse_flags(flags):
-    syn = flags & (1 << 3)  # 1 << 3 = 1000
-    ack = flags & (1 << 2)  # 1 << 2 = 0100
-    fin = flags & (1 << 1)  # 1 << 1 = 0010
-    rst = flags & (1 << 0)  # 1 << 0 = 0001
+    syn = flags & (1 << 3)  # 1 << 3 = 1000 # 8
+    ack = flags & (1 << 2)  # 1 << 2 = 0100 # 4
+    fin = flags & (1 << 1)  # 1 << 1 = 0010 # 2
+    rst = flags & (1 << 0)  # 1 << 0 = 0001 # 1
     return syn, ack, fin, rst
 
 
@@ -62,16 +62,31 @@ def set_flags(syn, ack, fin, rst):
     return flags
 
 
+# Description:
+#  Function for printing the flags in a more readable way
+# Parameters:
+#   flags: holds the flags
+# Returns:
+#   Returns nothing, it prints the flags e.g "Flags: syn ack"
+def pretty_flags(flags):
+    syn, ack, fin, rst = parse_flags(flags)
+    if syn != 0 or ack != 0 or fin != 0 or rst != 0:
+        print(
+            f"Flags: {'syn' if syn else ''}{'ack' if ack else ''}{'fin' if fin else ''}{'rst' if rst else ''}")
+    else:
+        print("Flags: 0")
+
+
 # test = set_flags(1, 0, 0, 0)
 # print(parse_flags(test))
 # print(parse_flags(0b1000))
 # print(parse_flags(0b1100))
 
 # Define the structure of the headed
-# L = 32 bits, H = 16 bits
+# I = 32 bits, H = 16 bits
 # Sequence Number:32 bits, Acknowledgment Number:32, Flags:16 ,Window:16
 # From https://docs.python.org/3/library/struct.html
-protocol_struct = struct.Struct("!IIHH")
+DRTP_struct = struct.Struct("!IIHH")
 
 
 # Description:
@@ -83,9 +98,9 @@ protocol_struct = struct.Struct("!IIHH")
 #   window: holds the window
 # Returns:
 #   Returns the header as a byte string
-def create_header(sequence_number, acknowledgment_number, flags, window):
+def encode_header(sequence_number, acknowledgment_number, flags, window):
     # Sequence Number:32 bits, Acknowledgment Number:32bits, Flags:16bits, Window:16bits
-    return protocol_struct.pack(sequence_number, acknowledgment_number, flags, window)
+    return DRTP_struct.pack(sequence_number, acknowledgment_number, flags, window)
 
 
 # Description:
@@ -94,8 +109,8 @@ def create_header(sequence_number, acknowledgment_number, flags, window):
 #   header: holds the header
 # Returns:
 #   Returns the header as a tuple
-def parse_header(header):
-    return protocol_struct.unpack(header)
+def decode_header(header):
+    return DRTP_struct.unpack(header)
 
 
 # Description:
@@ -104,24 +119,15 @@ def parse_header(header):
 #   raw_data: holds the packet
 # Returns:
 #   Returns the header as a tuple
-def strip_header(raw_data):
+def strip_decode_header(raw_data):
     # Get header from the packet (first 12 bytes)
     header = raw_data[:12]
     # Unpack the header fields
-    sequence_number, acknowledgment_number, flags, receiver_window = parse_header(header)
+    sequence_number, acknowledgment_number, flags, receiver_window = decode_header(header)
     # Keep only the raw_data from the packet (after the header)
     data = raw_data[12:]
     # Return the header fields and the raw_data decoded as a tuple
     return sequence_number, acknowledgment_number, flags, receiver_window, data.decode()
-
-
-def pretty_flags(flags):
-    syn, ack, fin, rst = parse_flags(flags)
-    if syn != 0 or ack != 0 or fin != 0 or rst != 0:
-        print(
-            f"Flags: {'syn' if syn else ''}{'ack' if ack else ''}{'fin' if fin else ''}{'rst' if rst else ''}")
-    else:
-        print("Flags: 0")
 
 
 # Description:
@@ -306,7 +312,7 @@ def run_client(port, file, reliability, mode):
         # Receive window
         receiver_window = 1024
         # Create a header with the syn flag set
-        packet = create_header(sequence_number, 0, flags, receiver_window)
+        packet = encode_header(sequence_number, 0, flags, receiver_window)
         # Send the packet
         sock.sendto(packet, address)
 
@@ -314,7 +320,7 @@ def run_client(port, file, reliability, mode):
             # Receive the response
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
             # Parse the flags
@@ -332,14 +338,14 @@ def run_client(port, file, reliability, mode):
                 # Flags for ack
                 flags = set_flags(0, 1, 0, 0)
                 # Create a header with the ack flag set
-                packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
+                packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
                 # Send the packet
                 sock.sendto(packet, address)
                 break
             # Kjør kode eller noe her
 
         while True:
-            packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
+            packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
             data = packet + "Hello World".encode()
             sock.sendto(data, address)
             data, address = sock.recvfrom(receiver_window)
@@ -375,7 +381,7 @@ def run_server(port, file, reliability, mode):
             raw_data, address = sock.recvfrom(receiver_window)
 
             # Parse the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
             # Check if the syn and ack flags are set
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -395,7 +401,7 @@ def run_server(port, file, reliability, mode):
                 # Flags for syn and ack
                 flags = set_flags(1, 1, 0, 0)
                 # Create a header with the syn and ack flags set
-                packet = create_header(sequence_number, acknowledgment_number, flags, receiver_window)
+                packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
                 print(f"Sending: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 pretty_flags(flags)
                 # Send the packet
@@ -409,7 +415,7 @@ def run_server(port, file, reliability, mode):
         while True:
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_header(raw_data)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             print(f"Received raw_data: {data}")
 
