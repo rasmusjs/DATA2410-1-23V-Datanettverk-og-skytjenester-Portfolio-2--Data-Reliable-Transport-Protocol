@@ -7,6 +7,7 @@ import re
 import sys
 import os
 import struct
+import math
 
 # Default values
 formatting_line = "-" * 45  # Formatting line = -----------------------------
@@ -272,7 +273,7 @@ def stop_and_wait(sock, address, last_acknowledgment_number, file):
     # Hvis NAK, send samme pakke på nytt
 
 
-def GBN(sock, address, file):
+def GBN(sock, address, packet_to_send=False):
     pass
     # Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
     # raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on.
@@ -283,13 +284,13 @@ def GBN(sock, address, file):
     #  anything and may discard these packets.
 
 
-def SR(sock, address, file):
+def SR(sock, address, packet_to_send=False):
     pass
     # Selective-Repeat (SR()): Rather than throwing away packets that arrive in the wrong order, put the packets in
     # the correct place in the receive buffer. Combine both GBN and SR to optimise the performance.
 
 
-def run_client(port, file, reliability, mode):
+def run_client(port, filename, reliability, mode):
     ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
     try:
         # Set up socket
@@ -343,6 +344,40 @@ def run_client(port, file, reliability, mode):
                 sock.sendto(packet, address)
                 break
             # Kjør kode eller noe her
+
+        # Get the size of the file
+        filesize = os.path.getsize(filename)
+
+        # Calculate the number of packets to send
+        packet_count = math.ceil(filesize / receiver_window)
+
+        packets_to_send = []
+
+        # Open the file and send it in chunks of 1024 bytes
+        with open(filename, 'rb') as f:
+            print(f"Reading from {filename}")
+            # Loop until the end of the file
+            while True:
+                raw_data = f.read(receiver_window)
+                packets_to_send.append(raw_data)
+                print(raw_data.decode())  # Print the raw_data we have read from the file
+                if not raw_data:
+                    break
+
+        packet = encode_header(sequence_number, 0, 0, receiver_window)
+        # Send the packet
+        sock.sendto(packet + packets_to_send[0], address)
+        # Send file with mode
+        if mode == "stop_and_wait":
+            stop_and_wait(sock, address, packets_to_send)
+
+        elif mode == "go_back_n":
+            pass
+            # GBN(sock, address, filename)
+
+        elif mode == "selective_repeat":
+            pass
+            # SR(sock, address, filename)
 
         while True:
             packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
