@@ -250,6 +250,9 @@ def random_isn():
 
 def stop_and_wait(sock, address, last_acknowledgment_number, file):
     pass
+    # Ide for stop and wait fra lab 25.04.2023:
+    # Når klient sender pakke til server, så sender vi header(ACK og SEQ-nummer) hit også
+
     # A stop and wait protocol (stop_and_wait()): The sender sends a packet, then waits for an ack confirming that
     # packet. If an ack is arrived, it sends a new packet. If an ack does not arrive, it waits for timeout (fixed
     # value: 500ms, use socket.settimeout) and then resends the packet. If the sender receives a NAK, it resends the
