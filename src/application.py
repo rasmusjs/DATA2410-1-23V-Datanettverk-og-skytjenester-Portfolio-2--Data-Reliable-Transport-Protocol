@@ -120,7 +120,7 @@ def decode_header(header):
 #   raw_data: holds the packet
 # Returns:
 #   Returns the header as a tuple
-def strip_decode_header(raw_data):
+def strip_packet(raw_data):
     # Get header from the packet (first 12 bytes)
     header = raw_data[:12]
     # Unpack the header fields
@@ -129,6 +129,11 @@ def strip_decode_header(raw_data):
     data = raw_data[12:]
     # Return the header fields and the raw_data decoded as a tuple
     return sequence_number, acknowledgment_number, flags, receiver_window, data.decode()
+
+
+def create_packet(sequence_number, acknowledgment_number, flags, window, data):
+    header = encode_header(sequence_number, acknowledgment_number, flags, window)
+    return header + data.encode()
 
 
 # Description:
@@ -249,7 +254,7 @@ def random_isn():
     return random.randint(0, 2 ** 32 - 1)
 
 
-def stop_and_wait(sock, address, acknowledgment_number_prev, packet_to_send=None):
+def stop_and_wait(sock, address, sequence_acknowledgment_prev, packet_to_send=None):
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
 
@@ -257,6 +262,7 @@ def stop_and_wait(sock, address, acknowledgment_number_prev, packet_to_send=None
     if packet_to_send is not None:
         number_of_packets = len(packet_to_send)
         last_packet_number = 1
+        acknowledgment_number_prev = sequence_acknowledgment_prev
         # Set the socket timeout to 500 ms
         sock.settimeout(0.5)
 
@@ -329,7 +335,7 @@ def run_client(port, filename, reliability, mode):
             # Receive the response from the server
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
             # Parse the flags
@@ -374,7 +380,7 @@ def run_client(port, filename, reliability, mode):
                 if not file_raw_data:
                     break
 
-        header = encode_header(sequence_number, 0, 0, receiver_window)
+        header = encode_header(sequence_number, acknowledgment_number, 0, receiver_window)
         # Send the packet
         sock.sendto(header + packets_to_send[0], address)
         # Send file with mode
@@ -426,7 +432,7 @@ def run_server(port, file, reliability, mode):
             raw_data, address = sock.recvfrom(receiver_window)
 
             # Parse the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             # Check if the syn and ack flags are set
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -460,7 +466,7 @@ def run_server(port, file, reliability, mode):
         while True:
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             print(f"Received raw_data: {data}")
 
