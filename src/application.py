@@ -249,10 +249,16 @@ def random_isn():
     return random.randint(0, 2 ** 32 - 1)
 
 
-def stop_and_wait(sock, address, last_acknowledgment_number, file):
-    pass
-    # Ide for stop and wait fra lab 25.04.2023:
-    # Når klient sender pakke til server, så sender vi header(ACK og SEQ-nummer) hit også
+def stop_and_wait(sock, address, acknowledgment_number_prev, packet_to_send=None):
+    # If we are the server, packet_to_send is None
+    # If we are the client, we have packets to send (not None)
+
+    # We are the client
+    if packet_to_send is not None:
+        number_of_packets = len(packet_to_send)
+        last_packet_number = 1
+        # Set the socket timeout to 500 ms
+        sock.settimeout(0.5)
 
     # A stop and wait protocol (stop_and_wait()): The sender sends a packet, then waits for an ack confirming that
     # packet. If an ack is arrived, it sends a new packet. If an ack does not arrive, it waits for timeout (fixed
@@ -313,15 +319,14 @@ def run_client(port, filename, reliability, mode):
 
         # Flags for syn
         flags = set_flags(1, 0, 0, 0)
-        # Receive window
-        receiver_window = 1024
+
         # Create a header with the syn flag set
         packet = encode_header(sequence_number, 0, flags, receiver_window)
         # Send the packet
         sock.sendto(packet, address)
 
         while True:
-            # Receive the response
+            # Receive the response from the server
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_decode_header(raw_data)
@@ -332,6 +337,7 @@ def run_client(port, filename, reliability, mode):
             # Print the flags
             pretty_flags(flags)
 
+            # If we receive a syn and ack from the server we can send a ack to the server
             if syn and ack:
                 # Save the acknowledgment number
                 acknowledgment_number_prev = acknowledgment_number
@@ -356,29 +362,30 @@ def run_client(port, filename, reliability, mode):
 
         packets_to_send = []
 
+        header_length = 12
         # Open the file and send it in chunks of 1024 bytes
         with open(filename, 'rb') as f:
             print(f"Reading from {filename}")
             # Loop until the end of the file
             while True:
-                raw_data = f.read(receiver_window)
-                packets_to_send.append(raw_data)
-                print(raw_data.decode())  # Print the raw_data we have read from the file
-                if not raw_data:
+                file_raw_data = f.read(receiver_window - header_length)
+                packets_to_send.append(receiver_window - header_length)
+                print(file_raw_data.decode())  # Print the raw_data we have read from the file
+                if not file_raw_data:
                     break
 
-        packet = encode_header(sequence_number, 0, 0, receiver_window)
+        header = encode_header(sequence_number, 0, 0, receiver_window)
         # Send the packet
-        sock.sendto(packet + packets_to_send[0], address)
+        sock.sendto(header + packets_to_send[0], address)
         # Send file with mode
-        if mode == "stop_and_wait":
-            stop_and_wait(sock, address, packets_to_send)
+        if reliability == "stop_and_wait":
+            stop_and_wait(sock, address, acknowledgment_number_prev, packets_to_send)
 
-        elif mode == "go_back_n":
+        elif reliability == "go_back_n":
             pass
             # GBN(sock, address, filename)
 
-        elif mode == "selective_repeat":
+        elif reliability == "selective_repeat":
             pass
             # SR(sock, address, filename)
 
