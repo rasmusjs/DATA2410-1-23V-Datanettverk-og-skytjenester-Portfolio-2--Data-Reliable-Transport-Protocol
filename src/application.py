@@ -283,6 +283,9 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         sock_timeout = 0.5
         sock.settimeout(sock_timeout)
 
+        packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[last_packet_number])
+        # Send the packet
+        sock.sendto(packet, address)
         while True:
             try:
                 # Receive ack from server
@@ -293,7 +296,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 syn, ack, fin, rst = parse_flags(flags)
 
                 print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                if ack and old_sequence_number + len(packets[last_packet_number]) == acknowledgment_number:
+                # if ack and old_sequence_number + len(packets[last_packet_number]) == acknowledgment_number:
+                if ack:
                     # Fix the sequence number and acknowledgment number here
                     print("Ack flag received from the server to the client and old seq + payload = ack from server")
 
@@ -322,6 +326,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
+
                 # Create the header
                 packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
                                        packets[last_packet_number - 1])
@@ -345,8 +350,12 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
-            if len(data) != 0 and sequence_number == old_acknowledgment_number:
-                print("Received packet")
+            if len(data) != 0:
+                acknowledgment_number = sequence_number + len(data)
+
+                # if len(data) != 0 and old_acknowledgment_number == sequence_number:
+                # print(f"Vi får {data} packet")
+                # print("Received packet")
 
                 # Increment the acknowledgment number by the payload from the client
                 old_acknowledgment_number = sequence_number + len(data)
@@ -355,10 +364,11 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # Send the ack
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, old_acknowledgment_number, flags, receiver_window), address)
-                print("Sent ack")
+                print(f"Sending ACK: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                print("\n")
                 # If the ack is the last packet, we are done
-            if fin:
-                break
+                if fin:
+                    break
         return packets
 
 
@@ -401,7 +411,7 @@ def run_client(port, filename, reliability, mode):
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
-
+        sequence_number = 1000
         # Keep track of the previous acknowledgment number
         acknowledgment_number_prev = 0
 
@@ -466,12 +476,6 @@ def run_client(port, filename, reliability, mode):
                 print(file_raw_data)  # Print the raw_data we have read from the file
                 if not file_raw_data:
                     break
-
-        # Create the packet
-        packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
-                               packets_to_send[0])
-        # Send the packet
-        sock.sendto(packet, address)
 
         reliability = "stop_and_wait"  # For testing
 
@@ -562,6 +566,7 @@ def run_server(port, file, reliability, mode):
                 acknowledgment_number = sequence_number + 1
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
+                sequence_number = 0
                 # Save the sequence number
                 sequence_number_prev = sequence_number
                 # Flags for syn and ack
