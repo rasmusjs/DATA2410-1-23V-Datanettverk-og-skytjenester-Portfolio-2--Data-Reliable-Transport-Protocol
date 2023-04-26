@@ -266,25 +266,83 @@ def stop_and_wait(sock, address, sequence_acknowledgment_prev, packet_to_send=No
         # Set the socket timeout to 500 ms
         sock.settimeout(5)
 
-    # A stop and wait protocol (stop_and_wait()): The sender sends a packet, then waits for an ack confirming that
-    # packet. If an ack is arrived, it sends a new packet. If an ack does not arrive, it waits for timeout (fixed
-    # value: 500ms, use socket.settimeout) and then resends the packet. If the sender receives a NAK, it resends the
-    # packet.
+        while True:
+            try:
+                # Receive ack from server
+                raw_data, address = sock.recvfrom(64)
+                # Decode the header
+                sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+                # Parse the flags
+                syn, ack, fin, rst = parse_flags(flags)
+                if ack and acknowledgment_number > sequence_acknowledgment_prev:
+                    # Fix the sequence number and acknowledgment number here
 
-    # Forslag til struktur for klienten:
+                    # Save the acknowledgment number
+                    acknowledgment_number_prev = acknowledgment_number
+                    # Increment the sequence number by 1 to acknowledge the syn and ack
+                    acknowledgment_number = sequence_number + len(packet_to_send[last_packet_number])
+                    # Set the sequence number to the acknowledgment number
+                    sequence_number = acknowledgment_number_prev
 
-    # Finn legden av filen, bruk os.path.getsize(filename)
+                    # Create the header
+                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                                           packet_to_send[last_packet_number])
 
-    # Finn antall pakker som skal sendes, bruk math.ceil(filesize / window_size)
+                    # Send the packet
+                    sock.sendto(packet, address)
 
-    # Finn antall bytes som kan sendes, bruk min(window_size, filesize - sent_bytes)
+                    # Increment the sequence number
+                    last_packet_number += 1
+                    # If the sequence number is equal to the number of packets, we are done
+                    if last_packet_number == number_of_packets:
+                        break
 
+            # Wait 500 ms
+            except sock.timeout:
+                # Resend the last packet
+                sock.sendto(packet_to_send[last_packet_number - 1], address)
+
+        # Close the socket
+
+
+    # Else we are server
+    else:
+        # Receive the first packet
+        packet_to_send = []
+        sequence_number_prev = sequence_acknowledgment_prev
+        while True:
+            # Receive ack from client
+            raw_data, address = sock.recvfrom(64)
+            # Decode the header
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+            # Parse the flags
+            syn, ack, fin, rst = parse_flags(flags)
+
+            if sequence_number_prev < acknowledgment_number:
+                print("Received packet")
+
+                # Increment the acknowledgment number by 1 to acknowledge the syn
+                acknowledgment_number = sequence_number + len(data)
+
+                # Save the sequence number
+                sequence_number_prev = sequence_number
+
+                packet_to_send.append(data)
+                # Send the ack
+                flags = set_flags(0, 1, 0, 0)
+                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
+                print("Sent ack")
+
+                # If the ack is the last packet, we are done
+                if fin:
+                    break
+
+        return packet_to_send
+
+    # Forklaring:
     # Send første pakke med sequence number 0 og ACK number 0
-
     # Vent på ACK eller NAK i 500ms med socket.settimeout(0.5)
-
     # Hvis ACK, send neste pakke
-
     # Hvis NAK, send samme pakke på nytt
 
 
@@ -401,6 +459,26 @@ def run_client(port, filename, reliability, mode):
         elif reliability == "selective_repeat":
             pass
             # SR(sock, address, filename)
+
+        # Start a twoway handshake to close the connection
+        # Set the flag to FIN, which is the 3rd element
+        flags = set_flags(0, 0, 1, 0)
+        packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
+        sock.sendto(packet, address)
+        print("FIN sent in the packet header!")
+
+        # Wait for the ACK from the server to finally close everything
+        while True:
+            raw_data, address = sock.recvfrom(receiver_window)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+
+            # Parse the flags
+            syn, ack, fin, rst = parse_flags(flags)
+
+            # If we receive the final ack, we close the connection on the client side
+            if ack:
+                print("Received ACK for FIN")
+                break
 
         while True:
             packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
