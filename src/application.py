@@ -264,7 +264,7 @@ def stop_and_wait(sock, address, sequence_acknowledgment_prev, packet_to_send=No
         last_packet_number = 1
         acknowledgment_number_prev = sequence_acknowledgment_prev
         # Set the socket timeout to 500 ms
-        sock.settimeout(0.5)
+        sock.settimeout(5)
 
     # A stop and wait protocol (stop_and_wait()): The sender sends a packet, then waits for an ack confirming that
     # packet. If an ack is arrived, it sends a new packet. If an ack does not arrive, it waits for timeout (fixed
@@ -307,6 +307,7 @@ def SR(sock, address, packet_to_send=False):
 
 def run_client(port, filename, reliability, mode):
     ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
+    filename = "test.txt"
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -375,17 +376,23 @@ def run_client(port, filename, reliability, mode):
             # Loop until the end of the file
             while True:
                 file_raw_data = f.read(receiver_window - header_length)
-                packets_to_send.append(receiver_window - header_length)
-                print(file_raw_data.decode())  # Print the raw_data we have read from the file
+                file_raw_data = file_raw_data.decode()
+                packets_to_send.append(file_raw_data)
+                print(file_raw_data)  # Print the raw_data we have read from the file
                 if not file_raw_data:
                     break
 
-        header = encode_header(sequence_number, acknowledgment_number, 0, receiver_window)
+        # Create the packet
+        packet = create_packet(sequence_number + len(packets_to_send[0]), acknowledgment_number, 0, receiver_window,
+                               packets_to_send[0])
         # Send the packet
-        sock.sendto(header + packets_to_send[0], address)
+        sock.sendto(packet, address)
+
+        reliability = "stop_and_wait"  # For testing
+
         # Send file with mode
         if reliability == "stop_and_wait":
-            stop_and_wait(sock, address, acknowledgment_number_prev, packets_to_send)
+            stop_and_wait(sock, address, acknowledgment_number, packets_to_send)
 
         elif reliability == "go_back_n":
             pass
@@ -462,13 +469,27 @@ def run_server(port, file, reliability, mode):
                 print("Connection established")
                 break
 
+        reliability = "stop_and_wait"  # For testing
+
+        # Send file with mode
+        if reliability == "stop_and_wait":
+            stop_and_wait(sock, address, acknowledgment_number)
+
+        elif reliability == "go_back_n":
+            pass
+            # GBN(sock, address, filename)
+
+        elif reliability == "selective_repeat":
+            pass
+            # SR(sock, address, filename)
         # Kjør kode eller noe her
-        while True:
+
+        """while True:
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-            print(f"Received raw_data: {data}")
+            print(f"Received raw_data: {data}")"""
 
     except KeyboardInterrupt:
         print("Server shutting down")
