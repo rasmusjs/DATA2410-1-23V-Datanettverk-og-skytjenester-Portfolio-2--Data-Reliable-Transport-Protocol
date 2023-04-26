@@ -478,7 +478,10 @@ def run_client(port, filename, reliability, mode):
             # If we receive the final ack, we close the connection on the client side
             if ack:
                 print("Received ACK for FIN")
+                # Close the connection on the client side once we have received an ack
+                sock.close()
                 break
+
 
         while True:
             packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
@@ -561,6 +564,25 @@ def run_server(port, file, reliability, mode):
             pass
             # SR(sock, address, filename)
         # Kjør kode eller noe her
+
+        while True:  # <---
+            raw_data, address = sock.recvfrom(receiver_window)
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+
+            # Parse the flags
+            syn, ack, fin, rst = parse_flags(flags)
+
+            # If we receive the FIN from the client, send an ACK
+            if fin:
+                print("Received FIN from the client")
+                acknowledgment_number = sequence_number + 1
+                flags = set_flags(1, 1, 0, 0)  # Set the ACK flag
+                packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
+                sock.sendto(packet, address)
+                print("Sent ACK for FIN")
+                # Close the connection on the 
+                sock.close()
+                break  # <---
 
         """while True:
             raw_data, address = sock.recvfrom(receiver_window)
