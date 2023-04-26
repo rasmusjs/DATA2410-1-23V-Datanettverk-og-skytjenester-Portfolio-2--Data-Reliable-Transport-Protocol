@@ -304,7 +304,6 @@ def stop_and_wait(sock, address, sequence_acknowledgment_prev, packet_to_send=No
 
         # Close the socket
 
-
     # Else we are server
     else:
         # Receive the first packet
@@ -450,7 +449,7 @@ def run_client(port, filename, reliability, mode):
 
         # Send file with mode
         if reliability == "stop_and_wait":
-            stop_and_wait(sock, address, acknowledgment_number, packets_to_send)
+        # stop_and_wait(sock, address, acknowledgment_number, packets_to_send)
 
         elif reliability == "go_back_n":
             pass
@@ -482,13 +481,12 @@ def run_client(port, filename, reliability, mode):
                 sock.close()
                 break
 
-
-        while True:
+        """while True:
             packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
             data = packet + "Hello World".encode()
             sock.sendto(data, address)
             data, address = sock.recvfrom(receiver_window)
-            print(data.decode())
+            print(data.decode())"""
 
     except KeyboardInterrupt:
         print("Client shutting down")
@@ -554,7 +552,7 @@ def run_server(port, file, reliability, mode):
 
         # Send file with mode
         if reliability == "stop_and_wait":
-            stop_and_wait(sock, address, acknowledgment_number)
+        # stop_and_wait(sock, address, acknowledgment_number)
 
         elif reliability == "go_back_n":
             pass
