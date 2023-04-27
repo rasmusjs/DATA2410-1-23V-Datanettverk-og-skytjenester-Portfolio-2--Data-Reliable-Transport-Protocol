@@ -128,12 +128,12 @@ def strip_packet(raw_data):
     # Keep only the raw_data from the packet (after the header)
     data = raw_data[12:]
     # Return the header fields and the raw_data decoded as a tuple
-    return sequence_number, acknowledgment_number, flags, receiver_window, data.decode()
+    return sequence_number, acknowledgment_number, flags, receiver_window, data
 
 
 def create_packet(sequence_number, acknowledgment_number, flags, window, data):
     header = encode_header(sequence_number, acknowledgment_number, flags, window)
-    return header + data.encode()
+    return header + data
 
 
 # Description:
@@ -457,9 +457,9 @@ def run_client(port, filename, reliability, mode):
             # Loop until the end of the file
             while True:
                 file_raw_data = f.read(receiver_window - header_length)
-                file_raw_data = file_raw_data.decode()
+                # file_raw_data = file_raw_data.decode()
                 packets_to_send.append(file_raw_data)
-                print(file_raw_data)  # Print the raw_data we have read from the file
+                # print(file_raw_data)  # Print the raw_data we have read from the file
                 if not file_raw_data:
                     break
 
@@ -570,9 +570,10 @@ def run_server(port, file, reliability, mode):
 
         reliability = "stop_and_wait"  # For testing
 
+        packets = []
         # Send file with mode
         if reliability == "stop_and_wait":
-            print(stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window))
+            packets = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
 
         elif reliability == "go_back_n":
             pass
@@ -584,6 +585,12 @@ def run_server(port, file, reliability, mode):
         # Kjør kode eller noe her
 
         close_server_connection(sock, address, sequence_number, receiver_window)
+
+        file = ""
+        for packet in packets:
+            file += packet.decode()
+
+        print(file)
         """while True:
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
