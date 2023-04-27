@@ -293,6 +293,11 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # Parse the flags
                 syn, ack, fin, rst = parse_flags(flags)
 
+                holding_ack = acknowledgment_number
+
+                acknowledgment_number = sequence_number + 1
+                sequence_number = holding_ack
+
                 print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 # if ack and old_sequence_number + len(packets[last_packet_number]) == acknowledgment_number:
                 if ack:
@@ -345,13 +350,19 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
+            holding_ack = acknowledgment_number
+
+            acknowledgment_number = sequence_number + len(data)
+            sequence_number = holding_ack
+
             # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
             if len(data) != 0:
                 # Add the data to the packets list
                 packets.append(data)
                 # Send the ack
                 flags = set_flags(0, 1, 0, 0)
-                sock.sendto(encode_header(sequence_number, sequence_number, flags, receiver_window), address)
+                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
+                print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             # If the fin flag is set, we are done
             if fin:
                 break
