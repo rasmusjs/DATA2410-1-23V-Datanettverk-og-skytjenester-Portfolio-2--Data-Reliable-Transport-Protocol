@@ -277,8 +277,6 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         number_of_packets = len(packets)
         last_packet_number = 0
 
-        old_sequence_number = sequence_number
-
         # Set the socket timeout to 500 ms
         sock_timeout = 0.5
         sock.settimeout(sock_timeout)
@@ -301,11 +299,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                     # Fix the sequence number and acknowledgment number here
                     print("Ack flag received from the server to the client and old seq + payload = ack from server")
 
-                    new_sequence_number = old_sequence_number + len(packets[last_packet_number])
-
-                    old_sequence_number = new_sequence_number
                     # Create the header
-                    packet = create_packet(new_sequence_number, acknowledgment_number, 0, receiver_window,
+                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
                                            packets[last_packet_number])
                     # Send the packet
                     sock.sendto(packet, address)
@@ -326,11 +321,9 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
-
                 # Create the header
                 packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
                                        packets[last_packet_number - 1])
-
                 # Resend the last packet
                 sock.sendto(packet, address)
 
@@ -340,7 +333,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
     else:
         # Receive the first packet
         packets = []
-        old_acknowledgment_number = sequence_number
+
         while True:
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
@@ -350,25 +343,16 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
+            # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
             if len(data) != 0:
-                acknowledgment_number = sequence_number + len(data)
-
-                # if len(data) != 0 and old_acknowledgment_number == sequence_number:
-                # print(f"Vi får {data} packet")
-                # print("Received packet")
-
-                # Increment the acknowledgment number by the payload from the client
-                old_acknowledgment_number = sequence_number + len(data)
-
+                # Add the data to the packets list
                 packets.append(data)
                 # Send the ack
                 flags = set_flags(0, 1, 0, 0)
-                sock.sendto(encode_header(sequence_number, old_acknowledgment_number, flags, receiver_window), address)
-                print(f"Sending ACK: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                print("\n")
-                # If the ack is the last packet, we are done
-                if fin:
-                    break
+                sock.sendto(encode_header(sequence_number, sequence_number, flags, receiver_window), address)
+            # If the fin flag is set, we are done
+            if fin:
+                break
         return packets
 
 
