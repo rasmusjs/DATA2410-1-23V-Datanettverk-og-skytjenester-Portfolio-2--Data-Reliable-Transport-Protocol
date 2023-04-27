@@ -173,38 +173,6 @@ def server_handle_client(sock, save_path):
         received_bytes += len(raw_data)"""
 
 
-# Description:
-#   Starts the server
-# Parameters:
-#   ip: holds the ip address
-#   port: holds the port
-#   save_path: holds the save path
-# Returns:
-#   None
-def start_server(ip, port, save_path):
-    pass
-    """print("Starting server")
-    try:
-        # Set up socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((ip, port))
-        print(f"Server started on {ip}:{port}")
-        while True:
-            # threading.Thread(target=handle_client, args=(sock,)).start()
-            # server_handle_client(sock, save_path)
-            raw_data, address = sock.recvfrom(1024)
-            print(raw_data.decode())
-
-
-    except KeyboardInterrupt:
-        print("Server shutting down")
-        exit(0)
-
-    except socket.error as e:
-        print(f"Socket error: {e}")
-        exit(1)"""
-
-
 def read_file(filename):
     return open(filename, 'rb')
 
@@ -388,6 +356,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
 
             # If the fin flag is set, we are done
+
             if fin:
                 break
         return packets
@@ -401,7 +370,11 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 
 
 def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None):
-    pass
+    # Set the window size to 5 packets
+    # window_size = receiver_window
+
+    # Add sequence numbers to a array, starting from 1 to the number of packets
+    # If the sequence number is wrong, discard the packets
 
     # Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
     # raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on.
@@ -439,7 +412,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             try:
                 for i in range(last_packet_number, total_acks + window_size):
                     # Increase the acknowledgment number
-                    next_ack = last_acknowledgment_number + len(packets[last_packet_number])
+                    next_ack = acknowledgment_number + len(packets[last_packet_number])
                     # Save the acknowledgment number
                     holding_ack = acknowledgment_number
                     # Increase the acknowledgment number by 1 to acknowledge the ack packet
