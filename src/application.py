@@ -284,6 +284,12 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[last_packet_number])
         # Send the packet
         sock.sendto(packet, address)
+
+        print(f"Første sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+
+        # Calculating what the next ack should be from server, for validation
+        next_ack = sequence_number + len(packets[last_packet_number])
+
         while True:
             try:
                 # Receive ack from server
@@ -293,22 +299,22 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # Parse the flags
                 syn, ack, fin, rst = parse_flags(flags)
 
-                holding_ack = acknowledgment_number
-
-                acknowledgment_number = sequence_number + 1
-                sequence_number = holding_ack
-
                 print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                # if ack and old_sequence_number + len(packets[last_packet_number]) == acknowledgment_number:
-                if ack:
 
-                    # Fix the sequence number and acknowledgment number here
-                    print("Ack flag received from the server to the client and old seq + payload = ack from server")
+                # If we receive a packet with the correct ack, send the next packet
+                if ack and acknowledgment_number == next_ack:
+                    # Increase the acknowledgment number 
+                    next_ack = acknowledgment_number + len(packets[last_packet_number])
+                    # Save the acknowledgment number
+                    holding_ack = acknowledgment_number
+                    # Increase the acknowledgment number by 1 to acknowledge the ack packet
+                    acknowledgment_number = sequence_number + 1
+                    # Set the new sequence number
+                    sequence_number = holding_ack
 
                     # Create the header
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
                                            packets[last_packet_number])
-
                     # Send the packet
                     sock.sendto(packet, address)
 
@@ -317,6 +323,165 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                     # If the sequence number is equal to the number of packets, we are done
                     if last_packet_number == number_of_packets:
                         break
+                # If we receive a packet with the wrong ack, resend the last packet
+                elif ack is None or acknowledgment_number != next_ack:
+                    # Create the header
+                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                                           packets[last_packet_number])
+                    # Send the packet
+                    sock.sendto(packet, address)
+                    print("Resending packet")
+
+            # Wait 500 ms before resending the packet
+            except TimeoutError as e:
+                print(f"Timeout: {e}")
+                # Close the socket
+                sock.close()
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                # Bind the socket to the old bind
+                sock.bind(old_address)
+                # Set the socket timeout to 500 ms
+                sock.settimeout(sock_timeout)
+                # Create the header
+                packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                                       packets[last_packet_number])
+                # Resend the last packet
+                sock.sendto(packet, address)
+
+        # We are done
+        return None
+    # Else we are server
+    else:
+        # Receive the first packet
+        packets = []
+        previous_acknowledgment_number = acknowledgment_number - 1
+
+        # Start receiving packets
+        while True:
+            # Receive ack from client
+            raw_data, address = sock.recvfrom(64)
+            # Decode the header
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+            # Parse the flags
+            syn, ack, fin, rst = parse_flags(flags)
+            print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+
+            # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
+            if acknowledgment_number == previous_acknowledgment_number + 1:
+                previous_acknowledgment_number = acknowledgment_number
+
+                holding_ack = acknowledgment_number
+
+                acknowledgment_number = sequence_number + len(data)
+                sequence_number = holding_ack
+
+                # Add the data to the packets list
+                packets.append(data)
+                # Send the ack
+                flags = set_flags(0, 1, 0, 0)
+                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
+                print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+            else:
+                print(
+                    f"Received duplicate: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                flags = set_flags(0, 0, 0, 0)
+                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
+
+            # If the fin flag is set, we are done
+            if fin:
+                break
+        return packets
+
+
+# Forklaring:
+# Send første pakke med sequence number 0 og ACK number 0
+# Vent på ACK eller NAK i 500ms med socket.settimeout(0.5)
+# Hvis ACK, send neste pakke
+# Hvis NAK, send samme pakke på nytt
+
+
+def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None):
+    pass
+
+    # Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
+    # raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on.
+    # If no ACK packet is received within a given timeout (choose a default value: 500ms, use socket.settimeout()
+    # function), all packets that have not previously been acknowledged are assumed to be lost, and they are
+    # retransmitted. A receiver passes on raw_data in order, and if packets arrive at the receiver in the wrong order,
+    # this indicates packet loss or reordering in the network. The DRTP receiver should in such cases not acknowledge
+    #  anything and may discard these packets.
+
+    # If we are the server, packet_to_send is None
+    # If we are the client, we have packets to send (not None)
+
+    # We are the client
+    """
+    if packets is not None:
+        first_acknowledgment_number = acknowledgment_number
+
+        # Get the old address and port
+        old_address = sock.getsockname()
+        number_of_packets = len(packets)
+        last_packet_number = 0
+
+        # Set the socket timeout to 500 ms
+        sock_timeout = 0.5
+        sock.settimeout(sock_timeout)
+
+        packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[last_packet_number])
+        # Send the packet
+        sock.sendto(packet, address)
+
+        print(f"Første sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+
+        # Calculating what the next ack should be from server, for validation
+        next_ack = sequence_number + len(packets[last_packet_number])
+
+        while True:
+            try:
+                # Receive ack from server
+                raw_data, address = sock.recvfrom(64)
+                # Decode the header
+                sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+                # Parse the flags
+                syn, ack, fin, rst = parse_flags(flags)
+
+                # SKal være acknowledgment_number = sequence_number + len(packets[last_packet_number])
+
+                print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+
+                if ack and acknowledgment_number == next_ack:
+                    # Increase the acknowledgment number 
+                    next_ack = acknowledgment_number + len(packets[last_packet_number])
+                    # Save the acknowledgment number
+                    holding_ack = acknowledgment_number
+                    # Increase the acknowledgment number by 1 to acknowledge the ack packet
+                    acknowledgment_number = sequence_number + 1
+                    # Set the new sequence number
+                    sequence_number = holding_ack
+
+                    # Create the header
+                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                                           packets[last_packet_number])
+                    # Send the packet
+                    sock.sendto(packet, address)
+
+                    # Increment the sequence number
+                    last_packet_number += 1
+                    # If the sequence number is equal to the number of packets, we are done
+                    if last_packet_number == number_of_packets:
+                        break
+
+                packetnumber = acknowledgment_number - first_acknowledgment_number
+                print(f"Packet number: {packetnumber}")
+                # Find the packet we need to resend
+                if acknowledgment_number != next_ack:
+                    packetnumber = acknowledgment_number - first_acknowledgment_number
+                    # Create the header
+                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                                           packets[packetnumber])
+                    # Resend the last packet
+                    sock.sendto(packet, address)
 
             # Wait 500 ms
             except TimeoutError as e:
@@ -340,7 +505,9 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
     else:
         # Receive the first packet
         packets = []
+        previous_acknowledgment_number = acknowledgment_number - 1
 
+        # Start receiving packets
         while True:
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
@@ -350,43 +517,32 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
-            holding_ack = acknowledgment_number
-
-            acknowledgment_number = sequence_number + len(data)
-            sequence_number = holding_ack
-
             # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
-            if len(data) != 0:
+            if acknowledgment_number == previous_acknowledgment_number + 1:
+                previous_acknowledgment_number = acknowledgment_number
+
+                holding_ack = acknowledgment_number
+
+                acknowledgment_number = sequence_number + len(data)
+                sequence_number = holding_ack
+
                 # Add the data to the packets list
                 packets.append(data)
                 # Send the ack
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+            else:
+                print(
+                    f"Received duplicate: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                flags = set_flags(0, 0, 0, 0)
+                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
+
             # If the fin flag is set, we are done
             if fin:
                 break
         return packets
-
-
-# Forklaring:
-# Send første pakke med sequence number 0 og ACK number 0
-# Vent på ACK eller NAK i 500ms med socket.settimeout(0.5)
-# Hvis ACK, send neste pakke
-# Hvis NAK, send samme pakke på nytt
-
-
-def GBN(sock, address, packet_to_send=False):
-    pass
-
-
-# Go-Back-N (GBN()): sender implements the Go-Back-N strategy using a fixed window size of 5 packets to transfer
-# raw_data. The sequence numbers represent packets, i.e. packet 1 is numbered 1, packet 2 is numbered 2 and so on.
-# If no ACK packet is received within a given timeout (choose a default value: 500ms, use socket.settimeout()
-# function), all packets that have not previously been acknowledged are assumed to be lost, and they are
-# retransmitted. A receiver passes on raw_data in order, and if packets arrive at the receiver in the wrong order,
-# this indicates packet loss or reordering in the network. The DRTP receiver should in such cases not acknowledge
-#  anything and may discard these packets.
+        """
 
 
 def SR(sock, address, packet_to_send=False):
@@ -398,7 +554,7 @@ def SR(sock, address, packet_to_send=False):
 
 
 def run_client(port, filename, reliability, mode):
-    ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
+    ip, port, serverip, serverport = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
     filename = "test.txt"
     try:
         # Set up socket
