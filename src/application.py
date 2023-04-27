@@ -296,12 +296,14 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 # if ack and old_sequence_number + len(packets[last_packet_number]) == acknowledgment_number:
                 if ack:
+
                     # Fix the sequence number and acknowledgment number here
                     print("Ack flag received from the server to the client and old seq + payload = ack from server")
 
                     # Create the header
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
                                            packets[last_packet_number])
+
                     # Send the packet
                     sock.sendto(packet, address)
 
