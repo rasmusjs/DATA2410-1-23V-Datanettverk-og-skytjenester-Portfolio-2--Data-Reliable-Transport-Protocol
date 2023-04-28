@@ -393,20 +393,27 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
     if packets is not None:
         first_sequence_number = sequence_number
         first_acknowledgment_number = acknowledgment_number
+        old_address = sock.getsockname()
+
+        # Set the socket timeout to 500 ms
+        sock_timeout = 0.5
+        sock.settimeout(sock_timeout)
+
         count = 0
-        last_ack = acknowledgment_number
+        last_ack = acknowledgment_number - 1
         sliding_window = 5
         while True:
-            print("Last ack: ", last_ack)
-            # Send the send x packets
-            for i in range(last_ack, min(sliding_window + last_ack, len(packets))):
-                # Create the header
-                packet = create_packet(sequence_number + i, acknowledgment_number, 0, receiver_window, packets[i])
-                # Send the packet
-                sock.sendto(packet, address)
-                # If we are done, break
+            try:
+                print("Last ack: ", last_ack)
+                # Send the send x packets
+                for i in range(last_ack, min(sliding_window + last_ack, len(packets))):
+                    print(i)
+                    # Create the header
+                    packet = create_packet(sequence_number + i, acknowledgment_number, 0, receiver_window, packets[i])
+                    # Send the packet
+                    sock.sendto(packet, address)
+                    # If we are done, break
 
-            while True:
                 # Receive the ack
                 raw_data, address = sock.recvfrom(64)
 
@@ -428,10 +435,24 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 if ack:
                     count += 1
                     last_ack += 1
+
+                # If we are done, break
+                if last_ack == len(packets):
                     break
+
+            except TimeoutError as e:
+                print(f"Timeout: {e}")
+                # Close the socket
+                sock.close()
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                # Bind the socket to the old bind
+                sock.bind(old_address)
+                # Set the socket timeout to 500 ms
+                sock.settimeout(sock_timeout)
 
     else:
         total_packets = 0
+        packets = []
         while True:
             raw_data, address = sock.recvfrom(64)
             # Decode the header
@@ -441,12 +462,16 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
             if len(data) != 0:
+                packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
                 packet = create_packet(sequence_number, acknowledgment_number, flags, receiver_window, b"")
                 sock.sendto(packet, address)
+                print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
             if fin:
-                exit(0)
+                print("We are done")
+                return packets
+
                 # break
 
 
@@ -540,6 +565,7 @@ def run_client(port, filename, reliability, mode):
                     break
 
         reliability = "go_back_n"  # For testing
+        # reliability = "stop_and_wait"  # For testing
 
         # Send file with mode
         if reliability == "stop_and_wait":
@@ -646,6 +672,7 @@ def run_server(port, file, reliability, mode):
                 break
 
         reliability = "go_back_n"  # For testing
+        # reliability = "stop_and_wait"  # For testing
 
         packets = []
         # Send file with mode
