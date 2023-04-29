@@ -396,7 +396,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         # Set the socket timeout to 500 ms
         sock_timeout = 0.5
         sock.settimeout(sock_timeout)
-
+        acknowledgment_number_prev = acknowledgment_number
         first_seq = sequence_number
 
         count = 0
@@ -405,6 +405,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         ack_count = 0
 
         next_ack = 0
+        old_ack_count = acknowledgment_number
 
         while ack_count < len(packets):
             print("Last ack: ", ack_count)
@@ -420,7 +421,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 else:
                     sequence_number += len(packets[i])
 
-                acknowledgment_number = i
+                # acknowledgment_number = acknowledgment_number_prev + i
                 print(i)
                 # Create the header
                 packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
@@ -445,10 +446,16 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                     print("Next ack: ", next_ack)
 
+                    if sequence_number == old_ack_count:
+                        next_ack = sequence_number + len(packets[i])
+
+                        print("ACK OK")
+                        old_ack_count += 1
                     # If the ack is the last ack, we are done
-                    if ack and acknowledgment_number == next_ack:
-                        next_ack += acknowledgment_number + len(packets[ack_count])
-                        ack_count += 1
+                    """if ack and acknowledgment_number == next_ack:
+                        
+                        #next_ack += acknowledgment_number + len(packets[ack_count])
+                        ack_count += 1"""
 
                 except TimeoutError as e:
                     print(f"Timeout: {e}")
@@ -465,10 +472,12 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
     else:
         # Receive the first packet
         packets = []
-        previous_acknowledgment_number = acknowledgment_number
+        previous_acknowledgment_number = acknowledgment_number + 1
         previous_sequence_number = sequence_number
         packets_to_ack = []
         window = 5
+
+        sequence_number_counter = 0
 
         # Start receiving packets
         while True:
@@ -487,6 +496,28 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             packets_to_ack.append((sequence_number, acknowledgment_number, len(data)))
 
             for i in range(min(window, len(packets_to_ack))):
+
+                if packets_to_ack[i][0] == previous_sequence_number + len(data):
+                    print("Not duplicate")
+                    previous_sequence_number = sequence_number
+
+                    new_acknowledgment_number = sequence_number + len(data)
+                    new_sequence_number = acknowledgment_number + sequence_number_counter
+                    print("New seq: ", new_sequence_number)
+                    print("New ack: ", new_acknowledgment_number)
+
+                    """previous_acknowledgment_number = acknowledgment_number
+                    previous_sequence_number = sequence_number"""
+                    packets.append(data)
+                    flags = set_flags(0, 1, 0, 0)
+                    sock.sendto(
+                        encode_header(new_sequence_number, new_acknowledgment_number, flags, receiver_window),
+                        address)
+
+                    print(
+                        f"Sent: SEQ {new_sequence_number}, ACK {new_acknowledgment_number}, {flags}, {receiver_window}")
+                    sequence_number_counter += 1
+
                 # Sjekk sekvensnummeret og ack nummeret stemmer her
                 """
                # if previous_acknowledgment_number + len(data) == packets_to_ack[i][0] and packets_to_ack[i][
