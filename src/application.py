@@ -317,7 +317,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 sock.sendto(packet, address)
 
         # We are done
-        return None
+        return sock
     # Else we are server
     else:
         # Receive the first packet
@@ -391,6 +391,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
     # We are the client
 
     if packets is not None:
+        old_timeout = sock.gettimeout()
+
         # Get the old address and port
         old_address = sock.getsockname()
         # Set the socket timeout to 500 ms
@@ -404,16 +406,16 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         # Antall godkjente acks
         ack_count = 0
 
-        next_ack = 0
         old_ack_count = acknowledgment_number
         compound_ack = sequence_number
 
         sequence_number = sequence_number
         print("Sequence number: ", sequence_number)
+        print(f"Packets tosend: {len(packets)} total acks: {ack_count}")
 
-        next_ack = sequence_number + len(packets[0]) + 1
+        next_ack = sequence_number + 1
 
-        while ack_count < len(packets):
+        while ack_count != len(packets) - 1:
             print("Last ack: ", ack_count)
             print("Next ack: ", next_ack)
             # Send the send x packets
@@ -421,6 +423,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # Increase the sequence number
                 if count == 0:  # Denne må endres!
                     sequence_number = first_seq
+                    acknowledgment_number = acknowledgment_number_prev
+                    print("First seq: ", sequence_number)
                     count = 5
                     print("\n")
                 else:
@@ -451,14 +455,13 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     syn, ack, fin, rst = parse_flags(flags)
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                     print("Expects" + str(next_ack))
-                    print("Compound ack: " + str(compound_ack))
 
                     if ack and acknowledgment_number == next_ack:
-                        print(first_seq)
-                        first_seq = sequence_number
-                        next_ack = acknowledgment_number + len(packets[ack_count]) + 1
+                        first_seq = acknowledgment_number
+                        acknowledgment_number_prev = sequence_number
+                        next_ack = acknowledgment_number + 1
                         ack_count += 1
-                        compound_ack += len(packets[ack_count])
+                        # compound_ack += len(packets[ack_count])
 
                         print("ACK OK")
                         old_ack_count += 1
@@ -474,12 +477,12 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     sock.settimeout(sock_timeout)
                     # Send again?
                     break
-
+        return sock
     else:
         # Receive the first packet
         packets = []
         previous_acknowledgment_number = acknowledgment_number + 1
-        previous_sequence_number = sequence_number
+        next_sequence_number = sequence_number
         packets_to_ack = []
         window = 5
 
@@ -488,6 +491,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
         # Start receiving packets
         while True:
+
             print("\n")
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
@@ -495,25 +499,28 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             # Parse the flags
             syn, ack, fin, rst = parse_flags(flags)
+            pretty_flags(flags)
             print(
                 f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
 
+            if fin:
+                break
             # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
 
             packets_to_ack.append((sequence_number, acknowledgment_number, len(data)))
-
+            print(f"Expects {next_sequence_number}")
             for i in range(min(window, len(packets_to_ack))):
-                print(f"Expects {previous_sequence_number + 1}")
-                if packets_to_ack[i][0] == previous_sequence_number + 1:
-                    compound_ack += len(data)
-                    print("Compound ack: ", compound_ack)
+
+                if packets_to_ack[i][0] == next_sequence_number:
+                    # compound_ack += len(data)
+                    # print("Compound ack: ", compound_ack)
 
                     print("Not duplicate")
-                    previous_sequence_number = sequence_number
+                    next_sequence_number = sequence_number + 1
 
                     holding_ack = acknowledgment_number
 
-                    acknowledgment_number = sequence_number + compound_ack
+                    acknowledgment_number = sequence_number
 
                     print("Data len " + str(len(data)))
                     sequence_number = holding_ack + 1
@@ -527,10 +534,9 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     print(
                         f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                     packet_count += 1
+
             # Reset the packets to ack list
             packets_to_ack = []
-            if fin:
-                break
         return packets
 
 
@@ -628,21 +634,21 @@ def run_client(port, filename, reliability, mode):
 
         # Send file with mode
         if reliability == "stop_and_wait":
-            stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                          packets_to_send)
+            sock = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
+                                 packets_to_send)
 
         elif reliability == "go_back_n":
-            GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                packets_to_send)
+            sock = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
+                       packets_to_send)
 
         elif reliability == "selective_repeat":
             pass
         # SR(sock, address, filename)
-
         # Start a twoway handshake to close the connection
         # Set the flag to FIN, which is the 3rd element
         flags = set_flags(0, 0, 1, 0)
         packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
+
         sock.sendto(packet, address)
         print("FIN sent in the packet header!")
 
