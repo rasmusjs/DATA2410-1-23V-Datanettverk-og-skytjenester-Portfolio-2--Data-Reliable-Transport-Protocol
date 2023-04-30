@@ -406,6 +406,12 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
         next_ack = 0
         old_ack_count = acknowledgment_number
+        compound_ack = sequence_number
+
+        sequence_number = sequence_number
+        print("Sequence number: ", sequence_number)
+
+        next_ack = sequence_number + len(packets[0]) + 1
 
         while ack_count < len(packets):
             print("Last ack: ", ack_count)
@@ -415,11 +421,10 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # Increase the sequence number
                 if count == 0:  # Denne må endres!
                     sequence_number = first_seq
-                    next_ack = sequence_number + len(packets[i])
                     count = 5
                     print("\n")
                 else:
-                    sequence_number += len(packets[i])
+                    sequence_number += 1
 
                 # acknowledgment_number = acknowledgment_number_prev + i
                 print(i)
@@ -433,7 +438,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                 count -= 1
-
+            print(f"Compound_ack: {compound_ack}")
+            print("Next ack: ", next_ack)
             while True:
                 try:
                     # Receive the ack
@@ -444,18 +450,18 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     # Parse the flags
                     syn, ack, fin, rst = parse_flags(flags)
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                    print("Next ack: ", next_ack)
+                    print("Expects" + str(next_ack))
+                    print("Compound ack: " + str(compound_ack))
 
-                    if sequence_number == old_ack_count:
-                        next_ack = sequence_number + len(packets[i])
+                    if ack and acknowledgment_number == next_ack:
+                        print(first_seq)
+                        first_seq = sequence_number
+                        next_ack = acknowledgment_number + len(packets[ack_count]) + 1
+                        ack_count += 1
+                        compound_ack += len(packets[ack_count])
 
                         print("ACK OK")
                         old_ack_count += 1
-                    # If the ack is the last ack, we are done
-                    """if ack and acknowledgment_number == next_ack:
-                        
-                        #next_ack += acknowledgment_number + len(packets[ack_count])
-                        ack_count += 1"""
 
                 except TimeoutError as e:
                     print(f"Timeout: {e}")
@@ -477,7 +483,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         packets_to_ack = []
         window = 5
 
-        sequence_number_counter = 0
+        packet_count = 0
+        compound_ack = 0
 
         # Start receiving packets
         while True:
@@ -496,66 +503,30 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             packets_to_ack.append((sequence_number, acknowledgment_number, len(data)))
 
             for i in range(min(window, len(packets_to_ack))):
+                print(f"Expects {previous_sequence_number + 1}")
+                if packets_to_ack[i][0] == previous_sequence_number + 1:
+                    compound_ack += len(data)
+                    print("Compound ack: ", compound_ack)
 
-                if packets_to_ack[i][0] == previous_sequence_number + len(data):
                     print("Not duplicate")
                     previous_sequence_number = sequence_number
 
-                    new_acknowledgment_number = sequence_number + len(data)
-                    new_sequence_number = acknowledgment_number + sequence_number_counter
-                    print("New seq: ", new_sequence_number)
-                    print("New ack: ", new_acknowledgment_number)
+                    holding_ack = acknowledgment_number
 
-                    """previous_acknowledgment_number = acknowledgment_number
-                    previous_sequence_number = sequence_number"""
+                    acknowledgment_number = sequence_number + compound_ack
+
+                    print("Data len " + str(len(data)))
+                    sequence_number = holding_ack + 1
+
                     packets.append(data)
                     flags = set_flags(0, 1, 0, 0)
                     sock.sendto(
-                        encode_header(new_sequence_number, new_acknowledgment_number, flags, receiver_window),
+                        encode_header(sequence_number, acknowledgment_number, flags, receiver_window),
                         address)
 
                     print(
-                        f"Sent: SEQ {new_sequence_number}, ACK {new_acknowledgment_number}, {flags}, {receiver_window}")
-                    sequence_number_counter += 1
-
-                # Sjekk sekvensnummeret og ack nummeret stemmer her
-                """
-               # if previous_acknowledgment_number + len(data) == packets_to_ack[i][0] and packets_to_ack[i][
-                    1] == previous_sequence_number:
-                    print("Not duplicate")
-                    previous_sequence_number = sequence_number
-                    previous_acknowledgment_number = acknowledgment_number + len(data)
-                    packets.append(data)
-                    break
-                """
-                # if previous_sequence_number + len(data) == sequence_number and packets_to_ack[
-                #       i] == previous_acknowledgment_number:
-                #     print("Not duplicate")
-                #      previous_sequence_number = sequence_number
-                #    previous_acknowledgment_number = acknowledgment_number
-
-            """
-            if packets_to_ack[i] == previous_acknowledgment_number + 1:
-                previous_acknowledgment_number = acknowledgment_number
-                holding_ack = acknowledgment_number
-
-                acknowledgment_number = sequence_number + len(data)
-                sequence_number = holding_ack
-
-                # Add the data to the packets list
-                packets.append(data)
-                # Send the ack
-                flags = set_flags(0, 1, 0, 0)
-                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
-                # print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-            else:
-                print(
-                    f"Received duplicate: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                # flags = set_flags(0, 0, 0, 0)
-                # sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
-"""
-            # If the fin flag is set, we are done
-
+                        f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                    packet_count += 1
             # Reset the packets to ack list
             packets_to_ack = []
             if fin:
