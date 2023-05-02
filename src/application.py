@@ -397,9 +397,11 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         last_packet_sent = 0
         print(f"Antall pakker å sende: {len(packets)}")
 
-        while ack_count + 1 != len(packets) - 1:
+        #  ack_count + 1 != len(packets) - 1
+        while ack_count < len(packets) - 2:
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
+                print(f"Sender pakke {i}")
                 if i == ack_count:
                     sequence_number = last_sequence  # Set a new sequence number for the last acked packet
                     acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
@@ -466,27 +468,14 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             # Parse the flags
             syn, ack, fin, rst = parse_flags(flags)
-            print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
+            print(
+                f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
             # If the fin flag is set, we are done
             if fin:
                 break
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
-            if sequence_number == next_sequence_number:
-                # Update the sequence number
-                prev_sequence_number = sequence_number
-                next_sequence_number = sequence_number + len(data)
-                # Increment the sequence number
-                sequence_number = acknowledgment_number + 1
-                # Add the data to the packets array
-                packets.append(data)
-                flags = set_flags(0, 1, 0, 0)
-                sock.sendto(
-                    encode_header(sequence_number, next_sequence_number, flags, receiver_window),
-                    address)
-
-                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
-            elif sequence_number == prev_sequence_number + len(data):
+            if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
                 # Update the sequence numbers
                 prev_sequence_number = sequence_number
                 next_sequence_number = sequence_number + len(data)
@@ -496,9 +485,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # Add the data to the packets array
                 packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
-                sock.sendto(
-                    encode_header(sequence_number, next_sequence_number, flags, receiver_window),
-                    address)
+                sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
             else:
                 print("Duplicate")
 
@@ -525,7 +512,7 @@ def run_client(port, filename, reliability, mode):
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
-        #sequence_number = 1000
+        # sequence_number = 1000
 
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
 
@@ -591,8 +578,8 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        # reliability = "go_back_n"  # For testing
-        reliability = "stop_and_wait"  # For testing
+        reliability = "go_back_n"  # For testing
+        # reliability = "stop_and_wait"  # For testing
 
         # Send file with mode
         if reliability == "stop_and_wait":
@@ -675,7 +662,7 @@ def run_server(port, file, reliability, mode):
                 acknowledgment_number = sequence_number + 1
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
-                #sequence_number = 0
+                # sequence_number = 0
                 # Save the sequence number
                 sequence_number_prev = sequence_number
                 # Flags for syn and ack
@@ -691,8 +678,8 @@ def run_server(port, file, reliability, mode):
                 print("Connection established")
                 break
 
-        # reliability = "go_back_n"  # For testing
-        reliability = "stop_and_wait"  # For testing
+        reliability = "go_back_n"  # For testing
+        # reliability = "stop_and_wait"  # For testing
 
         packets = []
         # Send file with mode
