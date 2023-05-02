@@ -468,12 +468,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 if fin:
                     break
 
-                print("Duplicate")
-                packets.append(data)
-                flags = set_flags(0, 1, 0, 0)
-                sock.sendto(
-                    encode_header(next_sequence_number, acknowledgment_number, flags, receiver_window),
-                    address)
+                print("Duplicate or out-of-order packet, discarding packet until correct is recieved")
+
 
         return packets
 
