@@ -398,8 +398,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         sock.settimeout(sock_timeout)
         acknowledgment_number_prev = acknowledgment_number
         last_sequence_number = sequence_number
-        count = 0
-        # Antall godkjente acks
         ack_count = 0
         next_ack = sequence_number + len(packets[ack_count])
 
@@ -408,26 +406,18 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         while ack_count + 1 != len(packets) - 1:
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
-                # Increase the sequence number
-                if count == 0:  # Denne må endres!
-                    sequence_number = last_sequence_number
-                    acknowledgment_number = acknowledgment_number_prev
-                    print("First seq: ", sequence_number)
-                    count = 5
-                    print("\n")
+                if i == ack_count:
+                    sequence_number = last_sequence_number  # Set a new sequence number for the last acked packet
+                    acknowledgment_number = acknowledgment_number_prev  # Set a new acknowledgment number for the last acked packet
                 else:
                     sequence_number += len(packets[i])
 
                 # Create the header
-                packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
-                                       packets[i])
+                packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
                 # Send the packet
                 sock.sendto(packet, address)
+                print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
-                print(
-                    f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-
-                count -= 1
             print("Next ack: ", next_ack)
             print("\n")
             while True:
