@@ -394,8 +394,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
                 # Create the header
-                packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
-                sequence_number += 1
+                packet = create_packet(sequence_number + i, acknowledgment_number, 0, receiver_window, packets[i])
                 # Send the packet
                 sock.sendto(packet, address)
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -469,7 +468,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     break
 
                 print("Duplicate or out-of-order packet, discarding packet until correct is recieved")
-
 
         return packets
 
