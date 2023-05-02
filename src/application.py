@@ -397,26 +397,20 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         sock_timeout = 0.5
         sock.settimeout(sock_timeout)
         acknowledgment_number_prev = acknowledgment_number
-        first_seq = sequence_number
+        last_sequence_number = sequence_number
         count = 0
         # Antall godkjente acks
         ack_count = 0
-        compound_ack = sequence_number
-        sequence_number = sequence_number
         next_ack = sequence_number + len(packets[ack_count])
 
         print(f"Antall pakker å sende: {len(packets)}")
 
         while ack_count + 1 != len(packets) - 1:
-            print("Antall akker: ", ack_count)
-            print("Next ack: ", next_ack)
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
-                print("I: ", i)
-                print(f"Min  {min(sliding_window + ack_count, len(packets))}")
                 # Increase the sequence number
                 if count == 0:  # Denne må endres!
-                    sequence_number = first_seq
+                    sequence_number = last_sequence_number
                     acknowledgment_number = acknowledgment_number_prev
                     print("First seq: ", sequence_number)
                     count = 5
@@ -434,8 +428,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                 count -= 1
-            print(f"Compound_ack: {compound_ack}")
             print("Next ack: ", next_ack)
+            print("\n")
             while True:
                 try:
                     # Receive the ack
@@ -449,7 +443,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     print("Expects" + str(next_ack))
 
                     if ack and acknowledgment_number == next_ack:
-                        first_seq = acknowledgment_number
+                        last_sequence_number = acknowledgment_number
                         acknowledgment_number_prev = sequence_number
                         ack_count += 1
                         next_ack = acknowledgment_number + len(packets[ack_count])
@@ -473,11 +467,9 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         packets = []
         next_sequence_number = sequence_number
         packet_count = 0
-        acknowledgment_number = sequence_number
         prev_sequence_number = sequence_number
         # Start receiving packets
         while True:
-
             print("\n")
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
@@ -495,7 +487,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             print("Next seq: " + str(next_sequence_number))
             # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
             if sequence_number == next_sequence_number:
-
                 prev_sequence_number = sequence_number
                 print("Not duplicate")
                 next_sequence_number = sequence_number + len(data)
