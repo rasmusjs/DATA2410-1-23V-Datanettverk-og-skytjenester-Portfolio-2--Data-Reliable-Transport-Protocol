@@ -381,119 +381,104 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         old_address = sock.getsockname()
         # Set the socket timeout to 500 ms
         sock_timeout = 0.5
-        # Set the new socket timeout
         sock.settimeout(sock_timeout)
-
-        # Set the last sequence number we received
-        last_sequence = sequence_number
-        # Set the last acknowledgment number we received
-        last_acknowledgement = acknowledgment_number
-        # Expected ack
-        expected_ack = sequence_number + len(packets[0])
-
-        # Total acks received
+        acknowledgment_number = acknowledgment_number
+        base = acknowledgment_number
+        sequence_number = base
         ack_count = 0
-        # Total packets sent, used to break out of the loop if we have sent all packets in the interval
-        last_packet_sent = 0
+
+
         print(f"Antall pakker å sende: {len(packets)}")
 
-        #  ack_count + 1 != len(packets) - 1
-        while ack_count < len(packets) - 2:
+        while ack_count < len(packets):
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
-                print(f"Sender pakke {i}")
-                if i == ack_count:
-                    sequence_number = last_sequence  # Set a new sequence number for the last acked packet
-                    acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
-                else:
-                    sequence_number += len(packets[i])  # Set a new sequence number for the next packet
-
                 # Create the header
                 packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
+                sequence_number += 1
                 # Send the packet
                 sock.sendto(packet, address)
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                last_packet_sent = i + 1
 
-            print("Next ack: ", expected_ack)
             print("\n")
             while True:
                 try:
                     # Receive the ack
                     raw_data, address = sock.recvfrom(64)
+
                     # Decode the header
                     sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
                     # Parse the flags
                     syn, ack, fin, rst = parse_flags(flags)
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
-                    # If the ack is correct, update the ack count
-                    if ack and acknowledgment_number == expected_ack:
-                        # Update the last sequence number and last ack number
-                        last_sequence = acknowledgment_number
-                        last_acknowledgement = sequence_number
-                        # Update the ack count
+                    if base <= acknowledgment_number:
+                        base = acknowledgment_number + 1
                         ack_count += 1
-                        # Update the expected ack
-                        expected_ack = acknowledgment_number + len(packets[ack_count])
-
-                    # If all the packets we have sent have been acked, we are done
-                    if last_packet_sent == ack_count:
-                        break
+                        print("ACK OK")
+                        print(ack_count)
 
                 except TimeoutError as e:
                     print(f"Timeout: {e}")
-                    # Close the socket
-                    sock.close()
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    # Bind the socket to the old bind
-                    sock.bind(old_address)
                     # Set the socket timeout to 500 ms
                     sock.settimeout(sock_timeout)
-                    # Send packets from the last acked packet
                     break
-
         return sock
     else:
         # Receive the first packet
         packets = []
-        next_sequence_number = sequence_number
-        prev_sequence_number = sequence_number
+        next_sequence_number = acknowledgment_number
+        packet_count = 0
+
         # Start receiving packets
         while True:
             print("\n")
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
-
             # Decode the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
-
-            # Parse the flags
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)            # Parse the flags
             syn, ack, fin, rst = parse_flags(flags)
+            pretty_flags(flags)
             print(
                 f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
-            # If the fin flag is set, we are done
+
             if fin:
                 break
 
-            # If the sequence number is the next sequence number, this is true for all packets except the last
-            if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
-                # if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
-                # Update the sequence numbers
-                prev_sequence_number = sequence_number
-                next_sequence_number = sequence_number + len(data)
+            print("Next seq: " + str(next_sequence_number))
+            # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
+            if sequence_number == next_sequence_number:
+                next_sequence_number += 1
+                print("Not duplicate")
+                acknowledgment_number += sequence_number + len(data)
                 print("Data len " + str(len(data)))
-                # Increment the sequence number
-                sequence_number = acknowledgment_number + 1
-                # Add the data to the packets array
+
+
                 packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
+                sock.sendto(
+                    encode_header(next_sequence_number, acknowledgment_number, flags, receiver_window),
+                    address)
 
-                sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
+                print(
+                    f"Sent: SEQ {next_sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                packet_count += 1
+
             else:
+                if fin:
+                    break
+
                 print("Duplicate")
+                packets.append(data)
+                flags = set_flags(0, 1, 0, 0)
+                sock.sendto(
+                    encode_header(next_sequence_number, acknowledgment_number, flags, receiver_window),
+                    address)
 
         return packets
+
+# Selective-Repeat (SR()): Rather than throwing away packets that arrive in the wrong order, put the packets in
+# the correct place in the receive buffer. Combine both GBN and SR to optimise the performance.
 
 
 def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None, sliding_window=5):
