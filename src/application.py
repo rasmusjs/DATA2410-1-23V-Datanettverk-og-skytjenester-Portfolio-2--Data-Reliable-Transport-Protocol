@@ -387,7 +387,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         sequence_number = base
         ack_count = 0
 
-
         print(f"Antall pakker å sende: {len(packets)}")
 
         while ack_count < len(packets):
@@ -435,7 +434,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
             # Decode the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)            # Parse the flags
+            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(
+                raw_data)  # Parse the flags
             syn, ack, fin, rst = parse_flags(flags)
             pretty_flags(flags)
             print(
@@ -451,7 +451,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 print("Not duplicate")
                 acknowledgment_number += sequence_number + len(data)
                 print("Data len " + str(len(data)))
-
 
                 packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
@@ -599,10 +598,9 @@ def OLDGBN(sock, address, sequence_number, acknowledgment_number, flags, receive
 # the correct place in the receive buffer. Combine both GBN and SR to optimise the performance.
 
 
-def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None, sliding_window=5):
-    # Selective-Repeat (SR()): Rather than throwing away packets that arrive in the wrong order, put the packets in
-    # the correct place in the receive buffer. Combine both GBN and SR to optimise the performance.
-    print("Using SR")
+def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
+           sliding_window=5):
+    print("Using GBN")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
 
@@ -688,7 +686,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
     else:
         # Receive the first packet
         packets = []
-        buffer = [sliding_window]
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
         # Start receiving packets
@@ -706,26 +703,20 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             if fin:
                 break
 
-            buffer.append((sequence_number, acknowledgment_number, flags, receiver_window, data))
-
-            for i in range(len(buffer)):
-                print(f"Buffer: {buffer[i]}")
-                # If the sequence number is the next sequence number, this is true for all packets except the last
-                if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
-                    # Update the sequence numbers
-                    prev_sequence_number = sequence_number
-                    next_sequence_number = sequence_number + len(data)
-                    print("Data len " + str(len(data)))
-                    # Increment the sequence number
-                    sequence_number = acknowledgment_number + 1
-                    # Add the data to the packets array
-                    packets.append(data)
-                    flags = set_flags(0, 1, 0, 0)
-                    sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
-                    # Remove the packet from the buffer
-                else:
-                    print("Duplicate")
-            buffer = [sliding_window]
+            # If the sequence number is the next sequence number, this is true for all packets except the last
+            if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
+                # Update the sequence numbers
+                prev_sequence_number = sequence_number
+                next_sequence_number = sequence_number + len(data)
+                print("Data len " + str(len(data)))
+                # Increment the sequence number
+                sequence_number = acknowledgment_number + 1
+                # Add the data to the packets array
+                packets.append(data)
+                flags = set_flags(0, 1, 0, 0)
+                sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
+            else:
+                print("Duplicate")
 
         return packets
 
@@ -808,9 +799,9 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        reliability = "go_back_n"  # For testing
+        # reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        # reliability = "selective_repeat"  # For testing
+        reliability = "selective_repeat"  # For testing
 
         # Send file with mode
         if reliability == "stop_and_wait":
@@ -914,7 +905,7 @@ def run_server(port, file, reliability, mode):
 
         reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        # reliability = "selective_repeat"  # For testing
+        reliability = "selective_repeat"  # For testing
 
         packets = []
         # Send file with mode
