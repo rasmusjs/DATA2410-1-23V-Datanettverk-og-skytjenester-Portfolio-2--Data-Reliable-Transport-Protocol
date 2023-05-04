@@ -518,8 +518,9 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 last_packet_sent = i + 1
 
-                print("Next ack: ", expected_ack)
-                print("\n")
+            print("Next ack: ", expected_ack)
+            print("\n")
+            while True:
                 try:
                     # Receive the ack
                     raw_data, address = sock.recvfrom(64)
@@ -538,6 +539,10 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                         ack_count += 1
                         # Update the expected ack
                         expected_ack = acknowledgment_number + len(packets[ack_count])
+
+                    # If all the packets we have sent have been acked, we are done
+                    if last_packet_sent == ack_count:
+                        break
 
                 except TimeoutError as e:
                     print(f"Timeout: {e}")
@@ -717,10 +722,9 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         # Receive the first packet
         packets = []
 
-        sequence_numbers_acked = []
-
+        buffered_sequence_numbers = []
         prev_sequence_number = sequence_number
-
+        next_sequence_number = sequence_number
         buffer = []
 
         dropp_packet = 3
@@ -728,10 +732,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
         # Start receiving packets
         while True:
-            if len(buffer) == sliding_window:
-                print("Buffer is full, writing to file")
-                buffer = []
-
             print("\n")
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
@@ -745,53 +745,47 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             if fin:
                 break
             packet_count += 1
-            if packet_count % dropp_packet == 0:
+            """if packet_count % dropp_packet == 0:
                 print("Dropping packet, seq: ", sequence_number)
-                continue
+                continue"""
+
+            buffer.append((sequence_number, acknowledgment_number, flags, receiver_window, data))
+            buffer.sort()
+
+            if len(buffer) > 5:
+                for i in range(len(buffer)):
+                    if i != len(buffer) - 1:
+                        sequence_number, acknowledgment_number, flags, receiver_window, data = buffer[i]
+                        if sequence_number == buffer[i + 1][0]:
+                            packets.append(data)
+                            next_sequence_number = sequence_number + len(data)
+                            # Increment the sequence number
+                            sequence_number = acknowledgment_number + 1
+                            # Add the data to the packets array
+                            packets.append(data)
+                            flags = set_flags(0, 1, 0, 0)
+                            sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window),
+                                        address)
+                            print(
+                                f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
+                buffer = []
 
             # Sort the buffered sequence numbers
-            # sequence_numbers_acked.sort()
+            # buffered_sequence_numbers.sort()
             # Check if the packet is in buffer
 
             new_packet = True
 
-            buffer.append((sequence_number, acknowledgment_number, flags, receiver_window, data))
-
-            if len(buffer) == sliding_window:
-                buffer.sort(key=lambda tup: tup[0])
-                print("Sorting: ", buffer)
-
-            if len(buffer) == sliding_window:
-                for i in range(len(buffer)):
-                    print(f"Printing buffer{buffer[i][0] + len(data)}  {buffer[i + 1][0]}")
-                    if buffer[i][0] + len(buffer[i][4]) == buffer[i + 1][0]:
-                        print("Packet is in order")
-                        sequence_numbers_acked.append(sequence_number)
-                        print("New packet")
-                        next_sequence_number = sequence_number + len(data)
-                        # Increment the sequence number
-                        sequence_number = acknowledgment_number + 1
-                        # Add the data to the packets array
-                        packets.append(data)
-                        flags = set_flags(0, 1, 0, 0)
-                        sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window),
-                                    address)
-                        print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
-                        # Remove the packet from the buffer
-                        buffer.pop(i - 1)
-                    else:
-                        print("Dårlig s")
-
             """# Check if the packet is in the buffer
-            for i in range(len(sequence_numbers_acked)):
-                if sequence_number == sequence_numbers_acked[i]:
+            for i in range(len(buffered_sequence_numbers)):
+                if sequence_number == buffered_sequence_numbers[i]:
                     new_packet = False
                     print("Duplicate packet")
                     break"""
 
             # Acknowledge the packet
             """if new_packet:
-                sequence_numbers_acked.append(sequence_number)
+                buffered_sequence_numbers.append(sequence_number)
                 print("New packet")
                 next_sequence_number = sequence_number + len(data)
                 # Increment the sequence number
@@ -883,9 +877,9 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        reliability = "go_back_n"  # For testing
+        # reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        # reliability = "selective_repeat"  # For testing
+        reliability = "selective_repeat"  # For testing
 
         # Send file with mode
         if reliability == "stop_and_wait":
@@ -989,7 +983,7 @@ def run_server(port, file, reliability, mode):
 
         reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        # reliability = "selective_repeat"  # For testing
+        reliability = "selective_repeat"  # For testing
 
         packets = []
         # Send file with mode
