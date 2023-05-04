@@ -370,7 +370,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 # Hvis NAK, send samme pakke på nytt
 
 
-def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None, sliding_window=5):
+"""def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None, sliding_window=5):
     print("Using GBN")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
@@ -469,10 +469,11 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 print("Duplicate or out-of-order packet, discarding packet until correct is recieved")
 
         return packets
+"""
 
 
-def OLDGBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
-           sliding_window=5):
+def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
+        sliding_window=5):
     print("Using GBN")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
@@ -729,8 +730,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
     else:
         # Receive the first packet
         packets = []
-        next_sequence_number = sequence_number
-        prev_sequence_number = sequence_number
+
+        buffered_sequence_numbers = []
 
         dropp_packet = 3
         packet_count = 0
@@ -750,16 +751,28 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             if fin:
                 break
             packet_count += 1
-            if packet_count % dropp_packet == 0:
+            """if packet_count % dropp_packet == 0:
                 print("Dropping packet, seq: ", sequence_number)
-                continue
+                continue"""
 
-            # If the sequence number is the next sequence number, this is true for all packets except the last
-            if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
-                # Update the sequence numbers
-                prev_sequence_number = sequence_number
+            # Sort the buffered sequence numbers
+            #buffered_sequence_numbers.sort()
+            # Check if the packet is in buffer
+
+            new_packet = True
+
+            # Check if the packet is in the buffer
+            for i in range(len(buffered_sequence_numbers)):
+                if sequence_number == buffered_sequence_numbers[i]:
+                    new_packet = False
+                    print("Duplicate packet")
+                    break
+
+            # Acknowledge the packet
+            if new_packet:
+                buffered_sequence_numbers.append(sequence_number)
+                print("New packet")
                 next_sequence_number = sequence_number + len(data)
-                print("Data len " + str(len(data)))
                 # Increment the sequence number
                 sequence_number = acknowledgment_number + 1
                 # Add the data to the packets array
@@ -767,8 +780,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
                 print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
-            else:
-                print("Duplicate")
 
         return packets
 
