@@ -531,14 +531,14 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                     # If the ack is correct, update the ack count
-                    if ack and acknowledgment_number == expected_ack:
+                    if ack and acknowledgment_number <= expected_ack:
                         # Update the last sequence number and last ack number
                         last_sequence = acknowledgment_number
                         last_acknowledgement = sequence_number
                         # Update the ack count
                         ack_count += 1
                         # Update the expected ack
-                        expected_ack = acknowledgment_number + len(packets[ack_count])
+                        expected_ack = acknowledgment_number + len(packets[ack_count]) - 1
 
                     # If all the packets we have sent have been acked, we are done
                     if last_packet_sent == ack_count:
@@ -722,13 +722,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         # Receive the first packet
         packets = []
 
-        buffered_sequence_numbers = []
-        prev_sequence_number = sequence_number
-        next_sequence_number = sequence_number
+        packets_acked = []
         buffer = []
-
-        dropp_packet = 3
-        packet_count = 0
 
         # Start receiving packets
         while True:
@@ -742,60 +737,42 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             print(
                 f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
             # If the fin flag is set, we are done
+
+            buffer.append((sequence_number, data))  # Add the packet to the buffer
+            if len(buffer) == sliding_window or fin:  # If the buffer is full or we have received the last packet
+                buffer.sort(key=lambda x: x[0])  # Sort the buffer by sequence number
+                print("Buffer")
+                for i in range(len(buffer)):  # Loop through the buffer
+                    if len(buffer[i][1]) > 0:  # If the packet is not empty
+                        print(buffer[i][0])
+                        packets.append(buffer[i][1])  # Add the packet to the packets list
+                buffer = []  # Reset the buffer
+
             if fin:
                 break
-            packet_count += 1
-            """if packet_count % dropp_packet == 0:
-                print("Dropping packet, seq: ", sequence_number)
-                continue"""
 
-            buffer.append((sequence_number, acknowledgment_number, flags, receiver_window, data))
-            buffer.sort()
-
-            if len(buffer) > 5:
-                for i in range(len(buffer)):
-                    if i != len(buffer) - 1:
-                        sequence_number, acknowledgment_number, flags, receiver_window, data = buffer[i]
-                        if sequence_number == buffer[i + 1][0]:
-                            packets.append(data)
-                            next_sequence_number = sequence_number + len(data)
-                            # Increment the sequence number
-                            sequence_number = acknowledgment_number + 1
-                            # Add the data to the packets array
-                            packets.append(data)
-                            flags = set_flags(0, 1, 0, 0)
-                            sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window),
-                                        address)
-                            print(
-                                f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
-                buffer = []
-
-            # Sort the buffered sequence numbers
-            # buffered_sequence_numbers.sort()
-            # Check if the packet is in buffer
-
+            # Mark the packet as new
             new_packet = True
 
-            """# Check if the packet is in the buffer
-            for i in range(len(buffered_sequence_numbers)):
-                if sequence_number == buffered_sequence_numbers[i]:
+            # Check if the packet is a duplicate
+            for i in range(len(packets_acked)):
+                if sequence_number == packets_acked[i]:
                     new_packet = False
                     print("Duplicate packet")
-                    break"""
+                    break
 
             # Acknowledge the packet
-            """if new_packet:
-                buffered_sequence_numbers.append(sequence_number)
+            if new_packet:
+                packets_acked.append(sequence_number)
                 print("New packet")
                 next_sequence_number = sequence_number + len(data)
                 # Increment the sequence number
                 sequence_number = acknowledgment_number + 1
-                # Add the data to the packets array
-                packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
-                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")"""
+                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
 
+        print("Packets received: ", len(packets))
         return packets
 
 
