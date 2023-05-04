@@ -675,6 +675,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                     for i in range(starting_point, len(packets)):
+                        print(f"Packet number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
+                        if expected_acks[i] == "":
+                            print("Expected ack is empty, breaking")
+                            break
                         # print("Printing i: ", i)
                         print(f"Sjekker for match {expected_acks[i]}")
                         if ack and acknowledgment_number == expected_acks[i] and packets_acked[i] is False:
@@ -687,7 +691,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                                 sequence_starting_point = acknowledgment_number
                                 acknowledgement_starting_point = sequence_number
                                 print("New starting point: ", starting_point)
-
                             # Update the ack countk
                             ack_count += 1
                             break
@@ -729,7 +732,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
 
-        dropp_packet = 2
+        dropp_packet = 3
         packet_count = 0
 
         # Start receiving packets
@@ -746,10 +749,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             # If the fin flag is set, we are done
             if fin:
                 break
-            """packet_count += 1
-            if packet_count == dropp_packet:
+            packet_count += 1
+            if packet_count % dropp_packet == 0:
                 print("Dropping packet, seq: ", sequence_number)
-                continue"""
+                continue
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
             if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
@@ -763,6 +766,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
+                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
             else:
                 print("Duplicate")
 
