@@ -601,7 +601,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
 def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
        sliding_window=5):
-    print("Using GBN")
+    print("Using SR")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
 
@@ -624,17 +624,17 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
         print(f"Antall pakker å sende: {len(packets)}")
 
-        packets_acked = [False] * len(packets)
+        packets_sent_and_received = [False] * len(packets)
         expected_acks = [""] * len(packets)
 
         minimum_sequence_number = sequence_number
 
         starting_point = 0
 
-        total_packets_sent = 0
+        total_packets_recevied = 0
 
         #  ack_count + 1 != len(packets) - 1
-        while starting_point < len(packets):
+        while total_packets_recevied < len(packets):
             print("Acked this interval: ", ack_count)
             ack_count = 0
             # Total packets sent, used to break out of the loop if we have sent all packets in the interval
@@ -646,10 +646,9 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
             # Send the send x packets
             for i in range(starting_point, min(sliding_window + starting_point, len(packets))):
-                print("\n")
-                print(f"Packet number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
-
-                if packets_acked[i] is False:
+                #print("\n")
+                if packets_sent_and_received[i] is False:
+                    print(f"Sending number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
                     # Create the header
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
                     # Send the packet
@@ -659,7 +658,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
                 sequence_number += len(packets[i])  # Set a new sequence number for the next packet
                 expected_acks[i] = sequence_number  # Set the expected ack for the next packet
-                if packets_acked[i] is False:
+                if packets_sent_and_received[i] is False:
                     print("Expected ack: ", expected_acks[i])
 
             # print("\n")
@@ -676,23 +675,18 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                     for i in range(starting_point, len(packets)):
-                        print(f"Packet number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
+                        print(f"Checking packet number: {i + 1} of {min(sliding_window + starting_point, len(packets))}")
                         if expected_acks[i] == "":
                             print("Expected ack is empty, breaking")
                             break
                         # print("Printing i: ", i)
-                        print(f"Sjekker for match {expected_acks[i]}")
-                        if ack and acknowledgment_number == expected_acks[i] and packets_acked[i] is False:
+                        # print(f"Sjekker for match {expected_acks[i]}")
+                        if ack and acknowledgment_number == expected_acks[i] and packets_sent_and_received[i] is False:
                             print(f"Fant match {expected_acks[i]}")
-                            packets_acked[i] = True
+                            packets_sent_and_received[i] = True
                             # Update the last sequence number and last ack number
-                            if minimum_sequence_number > sequence_number:
-                                starting_point = i + 1
-                                minimum_sequence_number = sequence_number
-                                sequence_starting_point = acknowledgment_number
-                                acknowledgement_starting_point = sequence_number
-                                print("New starting point: ", starting_point)
                             # Update the ack countk
+                            total_packets_recevied += 1
                             ack_count += 1
                             break
                             # Update the expected ack
@@ -720,10 +714,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     sock.bind(old_address)
                     # Set the socket timeout to 500 ms
                     sock.settimeout(sock_timeout)
-                    if ack_count >= starting_point:
-                        starting_point = ack_count
-                        print("New starting point: ", starting_point)
-                        # Send packets from the last acked packet
                     break
 
         return sock
@@ -751,12 +741,12 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             if fin:
                 break
             packet_count += 1
-            """if packet_count % dropp_packet == 0:
+            if packet_count % dropp_packet == 0:
                 print("Dropping packet, seq: ", sequence_number)
-                continue"""
+                continue
 
             # Sort the buffered sequence numbers
-            #buffered_sequence_numbers.sort()
+            # buffered_sequence_numbers.sort()
             # Check if the packet is in buffer
 
             new_packet = True
