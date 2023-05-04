@@ -573,8 +573,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             syn, ack, fin, rst = parse_flags(flags)
             print(
                 f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
-            # If the fin flag is set, we are done
-            if fin:
+            if fin:  # If we have received the last packet exit the loop
                 break
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
@@ -721,7 +720,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
     else:
         # Receive the first packet
         packets = []
-
         packets_acked = []
         buffer = []
 
@@ -736,43 +734,39 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             syn, ack, fin, rst = parse_flags(flags)
             print(
                 f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
-            # If the fin flag is set, we are done
 
-            buffer.append((sequence_number, data))  # Add the packet to the buffer
-            if len(buffer) == sliding_window or fin:  # If the buffer is full or we have received the last packet
+            #  If the size of the buffer is the same as the sliding window, we can sort the buffer with the packets
+            if len(buffer) == sliding_window or fin:  # If the buffer is full, or we have received the last packet
                 buffer.sort(key=lambda x: x[0])  # Sort the buffer by sequence number
-                print("Buffer")
                 for i in range(len(buffer)):  # Loop through the buffer
                     if len(buffer[i][1]) > 0:  # If the packet is not empty
                         print(buffer[i][0])
                         packets.append(buffer[i][1])  # Add the packet to the packets list
-                buffer = []  # Reset the buffer
+                buffer = []  # Empty the buffer
 
-            if fin:
+            if fin:  # If we have received the last packet exit the loop
                 break
 
             # Mark the packet as new
             new_packet = True
 
-            # Check if the packet is a duplicate
+            # Check if the packet is a duplicate packet
             for i in range(len(packets_acked)):
                 if sequence_number == packets_acked[i]:
                     new_packet = False
                     print("Duplicate packet")
                     break
 
-            # Acknowledge the packet
+            # Acknowledge the packet if it's new
             if new_packet:
-                packets_acked.append(sequence_number)
                 print("New packet")
-                next_sequence_number = sequence_number + len(data)
-                # Increment the sequence number
-                sequence_number = acknowledgment_number + 1
-                flags = set_flags(0, 1, 0, 0)
-                sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
-                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
+                buffer.append((sequence_number, data))  # Add the packet to the buffer
+                next_acknowledgment_number = sequence_number + len(data)  # Increment the sequence number
+                sequence_number = acknowledgment_number + 1  # Increment the sequence number
+                flags = set_flags(0, 1, 0, 0)  # Set the flags for ack
+                sock.sendto(encode_header(sequence_number, next_acknowledgment_number, flags, receiver_window), address)
+                print(f"Sent: SEQ {sequence_number}, ACK {next_acknowledgment_number}, {flags}, {receiver_window}")
 
-        print("Packets received: ", len(packets))
         return packets
 
 
@@ -788,7 +782,7 @@ def run_client(port, filename, reliability, mode):
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
-        sequence_number = 1000
+        #sequence_number = 1000
 
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
 
@@ -919,7 +913,7 @@ def run_server(port, file, reliability, mode):
         sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 64
 
         # Variable to keep track of the previous sequence_number number
-        sequence_number_prev = 0
+        # sequence_number_prev = 0
 
         # Three-way handshake based on https://www.ietf.org/rfc/rfc793.txt page 31
         while True:
@@ -942,7 +936,7 @@ def run_server(port, file, reliability, mode):
                 acknowledgment_number = sequence_number + 1
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
-                sequence_number = 0
+                #sequence_number = 0
                 # Save the sequence number
                 sequence_number_prev = sequence_number
                 # Flags for syn and ack
