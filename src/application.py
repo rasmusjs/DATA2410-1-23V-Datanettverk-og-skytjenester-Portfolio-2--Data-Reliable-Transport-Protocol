@@ -617,8 +617,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         sequence_starting_point = sequence_number
         # Set the last acknowledgment number we received
         acknowledgement_starting_point = acknowledgment_number
-        # Expected ack
-        expected_ack = sequence_number + len(packets[0])
 
         # Total acks received
         ack_count = 0
@@ -632,8 +630,11 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
         starting_point = 0
 
+        total_packets_sent = 0
+
         #  ack_count + 1 != len(packets) - 1
-        while ack_count < len(packets) - 2:
+        while starting_point < len(packets):
+            print("Acked this interval: ", ack_count)
             ack_count = 0
             # Total packets sent, used to break out of the loop if we have sent all packets in the interval
             packets_sent_in_interval = 0
@@ -685,8 +686,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                                 minimum_sequence_number = sequence_number
                                 sequence_starting_point = acknowledgment_number
                                 acknowledgement_starting_point = sequence_number
-
-                            print("New starting point: ", starting_point)
+                                print("New starting point: ", starting_point)
 
                             # Update the ack countk
                             ack_count += 1
@@ -701,8 +701,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                         minimum_sequence_number = sequence_number
                         sequence_starting_point = acknowledgment_number
                         acknowledgement_starting_point = sequence_number
-                        if ack_count >= starting_point:
-                            starting_point = ack_count
+                        starting_point += ack_count
                         print("New starting point: ", starting_point)
                         # Send packets from the last acked packet
                         print("All packets received")
@@ -729,6 +728,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         packets = []
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
+
+        dropp_packet = 2
+        packet_count = 0
+
         # Start receiving packets
         while True:
             print("\n")
@@ -743,6 +746,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             # If the fin flag is set, we are done
             if fin:
                 break
+            """packet_count += 1
+            if packet_count == dropp_packet:
+                print("Dropping packet, seq: ", sequence_number)
+                continue"""
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
             if sequence_number == prev_sequence_number + len(data) or sequence_number == next_sequence_number:
