@@ -646,7 +646,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
             # Send the send x packets
             for i in range(starting_point, min(sliding_window + starting_point, len(packets))):
-                #print("\n")
+                # print("\n")
                 if packets_sent_and_received[i] is False:
                     print(f"Sending number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
                     # Create the header
@@ -675,7 +675,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                     for i in range(starting_point, len(packets)):
-                        print(f"Checking packet number: {i + 1} of {min(sliding_window + starting_point, len(packets))}")
+                        print(
+                            f"Checking packet number: {i + 1} of {min(sliding_window + starting_point, len(packets))}")
                         if expected_acks[i] == "":
                             print("Expected ack is empty, breaking")
                             break
@@ -721,13 +722,21 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         # Receive the first packet
         packets = []
 
-        buffered_sequence_numbers = []
+        sequence_numbers_acked = []
+
+        prev_sequence_number = sequence_number
+
+        buffer = []
 
         dropp_packet = 3
         packet_count = 0
 
         # Start receiving packets
         while True:
+            if len(buffer) == sliding_window:
+                print("Buffer is full, writing to file")
+                buffer = []
+
             print("\n")
             # Receive ack from client
             raw_data, address = sock.recvfrom(64)
@@ -746,21 +755,47 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 continue
 
             # Sort the buffered sequence numbers
-            # buffered_sequence_numbers.sort()
+            # sequence_numbers_acked.sort()
             # Check if the packet is in buffer
 
             new_packet = True
 
-            # Check if the packet is in the buffer
-            for i in range(len(buffered_sequence_numbers)):
-                if sequence_number == buffered_sequence_numbers[i]:
+            buffer.append((sequence_number, acknowledgment_number, flags, receiver_window, data))
+
+            if len(buffer) == sliding_window:
+                buffer.sort(key=lambda tup: tup[0])
+                print("Sorting: ", buffer)
+
+            if len(buffer) == sliding_window:
+                for i in range(len(buffer)):
+                    print(f"Printing buffer{buffer[i][0] + len(data)}  {buffer[i + 1][0]}")
+                    if buffer[i][0] + len(buffer[i][4]) == buffer[i + 1][0]:
+                        print("Packet is in order")
+                        sequence_numbers_acked.append(sequence_number)
+                        print("New packet")
+                        next_sequence_number = sequence_number + len(data)
+                        # Increment the sequence number
+                        sequence_number = acknowledgment_number + 1
+                        # Add the data to the packets array
+                        packets.append(data)
+                        flags = set_flags(0, 1, 0, 0)
+                        sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
+                        print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
+                        # Remove the packet from the buffer
+                        buffer.pop(i-1)
+                    else:
+                        print("Dårlig s")
+
+            """# Check if the packet is in the buffer
+            for i in range(len(sequence_numbers_acked)):
+                if sequence_number == sequence_numbers_acked[i]:
                     new_packet = False
                     print("Duplicate packet")
-                    break
+                    break"""
 
             # Acknowledge the packet
-            if new_packet:
-                buffered_sequence_numbers.append(sequence_number)
+            """if new_packet:
+                sequence_numbers_acked.append(sequence_number)
                 print("New packet")
                 next_sequence_number = sequence_number + len(data)
                 # Increment the sequence number
@@ -769,7 +804,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
-                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
+                print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")"""
 
         return packets
 
