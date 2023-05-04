@@ -518,9 +518,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                 last_packet_sent = i + 1
 
-            print("Next ack: ", expected_ack)
-            print("\n")
-            while True:
+                print("Next ack: ", expected_ack)
+                print("\n")
                 try:
                     # Receive the ack
                     raw_data, address = sock.recvfrom(64)
@@ -539,10 +538,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                         ack_count += 1
                         # Update the expected ack
                         expected_ack = acknowledgment_number + len(packets[ack_count])
-
-                    # If all the packets we have sent have been acked, we are done
-                    if last_packet_sent == ack_count:
-                        break
 
                 except TimeoutError as e:
                     print(f"Timeout: {e}")
@@ -779,10 +774,11 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                         # Add the data to the packets array
                         packets.append(data)
                         flags = set_flags(0, 1, 0, 0)
-                        sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
+                        sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window),
+                                    address)
                         print(f"Sent: SEQ {sequence_number}, ACK {next_sequence_number}, {flags}, {receiver_window}")
                         # Remove the packet from the buffer
-                        buffer.pop(i-1)
+                        buffer.pop(i - 1)
                     else:
                         print("Dårlig s")
 
@@ -887,9 +883,9 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        # reliability = "go_back_n"  # For testing
+        reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        reliability = "selective_repeat"  # For testing
+        # reliability = "selective_repeat"  # For testing
 
         # Send file with mode
         if reliability == "stop_and_wait":
@@ -993,7 +989,7 @@ def run_server(port, file, reliability, mode):
 
         reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        reliability = "selective_repeat"  # For testing
+        # reliability = "selective_repeat"  # For testing
 
         packets = []
         # Send file with mode
