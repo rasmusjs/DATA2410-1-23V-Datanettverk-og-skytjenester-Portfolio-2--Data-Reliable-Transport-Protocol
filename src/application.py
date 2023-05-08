@@ -34,16 +34,6 @@ def main_testing():
     subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
 
 
-# Remove the existing qdisc
-# subprocess.run(["tc", "qdisc", "del", "dev", "h1-eth0", "root"])
-
-# Emulate 5% packet reordering
-# subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", "50ms", "reorder", "5%"])
-
-# Emulate 2% duplicate packets
-# subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "duplicate", "2%"])
-
-
 # Default values
 formatting_line = "-" * 45  # Formatting line = -----------------------------
 default_server_save_path = "server_files"  # Path to the folder where received files are stored
@@ -888,9 +878,11 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        #reliability = "go_back_n"  # For testing
+        # reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
         reliability = "selective_repeat"  # For testing
+
+        start_time = time.time()
 
         # Send file with mode
         if reliability == "stop_and_wait":
@@ -906,6 +898,11 @@ def run_client(port, filename, reliability, mode):
         elif reliability == "selective_repeat":
             sock = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
                       packets_to_send)
+
+        elapsed_time = time.time() - start_time
+
+        print(f"Throughput: {filesize / elapsed_time}")
+
         # SR(sock, address, filename)
         # Start a twoway handshake to close the connection
         # Set the flag to FIN, which is the 3rd element
@@ -997,6 +994,8 @@ def run_server(port, file, reliability, mode):
         reliability = "selective_repeat"  # For testing
 
         packets = []
+
+        start_time = time.time()
         # Send file with mode
         if reliability == "stop_and_wait":
             packets = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
@@ -1008,6 +1007,14 @@ def run_server(port, file, reliability, mode):
 
         elif reliability == "selective_repeat":
             packets = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
+
+        elapsed_time = time.time() - start_time
+        filesize = 0
+        for packet in packets:
+            filesize += len(packet)
+
+        print(f"Throughput: {filesize / elapsed_time}")
+
         # SR(sock, address, filename)
         # Kjør kode eller noe her
 
