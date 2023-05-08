@@ -322,7 +322,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # If we receive a packet with the wrong ack, resend the last packet
                 elif ack is None or acknowledgment_number != expected_ack:
                     # Create the header
-                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                    packet = create_packet(sequence_number, acknowledgment_number + 1, 0, receiver_window,
                                            packets[last_packet_sent])
                     # Send the packet
                     sock.sendto(packet, address)
@@ -339,7 +339,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
                 # Create the header
-                packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
+                packet = create_packet(sequence_number, acknowledgment_number + 1, 0, receiver_window,
                                        packets[last_packet_sent])
                 # Resend the last packet
                 sock.sendto(packet, address)
@@ -381,9 +381,11 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 flags = set_flags(0, 1, 0, 0)
                 sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+
             else:
                 print(
                     f"Received duplicate: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                print("Expected ack: " + str(previous_acknowledgment_number + 1))
                 flags = set_flags(0, 0, 0, 0)
                 sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
 
@@ -636,6 +638,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
     # We are the client
     if packets is not None:
+
         # Get the old address and port
         old_address = sock.getsockname()
         # Set the socket timeout to 500 ms
