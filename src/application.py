@@ -8,6 +8,23 @@ import sys
 import os
 import struct
 import math
+import subprocess
+
+# Remove the existing qdisc
+# subprocess.run(["tc", "qdisc", "del", "dev", "h1-eth0", "root"])
+
+# Add a new qdisc with 10% packet loss
+# subprocess.run(["tc", "qdisc", "add", "dev", "h1-eth0", "root", "netem", "loss", "10%"])
+
+# Emulate 10% packet loss
+# subprocess.run(["tc", "qdisc", "add", "dev", "h1-eth0", "root", "netem", "loss", "10%"])
+
+# Emulate 5% packet reordering
+# subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", "50ms", "reorder", "5%"])
+
+# Emulate 2% duplicate packets
+# subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "duplicate", "2%"])
+
 
 # Default values
 formatting_line = "-" * 45  # Formatting line = -----------------------------
@@ -327,7 +344,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         # Start receiving packets
         while True:
             # Receive ack from client
-            raw_data, address = sock.recvfrom(64)
+            raw_data, address = sock.recvfrom(receiver_window)
             # Decode the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             # Parse the flags
@@ -523,7 +540,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             while True:
                 try:
                     # Receive the ack
-                    raw_data, address = sock.recvfrom(64)
+                    raw_data, address = sock.recvfrom(receiver_window)
                     # Decode the header
                     sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
                     # Parse the flags
@@ -566,7 +583,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         while True:
             print("\n")
             # Receive ack from client
-            raw_data, address = sock.recvfrom(64)
+            raw_data, address = sock.recvfrom(receiver_window)
             # Decode the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             # Parse the flags
@@ -666,7 +683,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 try:
                     print("\nSjekker for acks")
                     # Receive the ack
-                    raw_data, address = sock.recvfrom(64)
+                    raw_data, address = sock.recvfrom(receiver_window)
                     # Decode the header
                     sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
                     # Parse the flags
@@ -727,7 +744,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         while True:
             print("\n")
             # Receive ack from client
-            raw_data, address = sock.recvfrom(64)
+            raw_data, address = sock.recvfrom(receiver_window)
             # Decode the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
             # Parse the flags
@@ -782,7 +799,7 @@ def run_client(port, filename, reliability, mode):
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
-        #sequence_number = 1000
+        # sequence_number = 1000
 
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
 
@@ -927,8 +944,8 @@ def run_server(port, file, reliability, mode):
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             pretty_flags(flags)
 
-            # Overwrite the receiver window to 64
-            receiver_window = 64
+            # Overwrite the receiver window to 1472 bytes
+            receiver_window = 1472
 
             # Check if the syn flag is set
             if syn:
@@ -936,7 +953,7 @@ def run_server(port, file, reliability, mode):
                 acknowledgment_number = sequence_number + 1
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
-                #sequence_number = 0
+                # sequence_number = 0
                 # Save the sequence number
                 sequence_number_prev = sequence_number
                 # Flags for syn and ack
