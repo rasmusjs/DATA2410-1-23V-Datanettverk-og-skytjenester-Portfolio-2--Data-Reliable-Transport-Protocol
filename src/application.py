@@ -21,9 +21,11 @@ def main_testing(test_case):
     print("Packet loss added for server side")
 
     # Get interface name
-    # interface = subprocess.run(["ifconfig"], stdout=subprocess.PIPE).stdout.decode("utf-8")???
+    cmd = "route | awk 'NR==3{print $NF}'"  # Get the inferface name from the second line and last element of the output of the command "route"
+    iface = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+    print(f"Interface: {iface}")
 
-    subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
+    # subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
 
     # Add a new qdisc with 10% packet loss
     # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
@@ -586,13 +588,17 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
                 # Send packets from the last acked packet
-                if last_packet_sent != ack_count:
-                    for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
-                        print(f"Sender pakke {i}")
-                        if i == ack_count:
-                            sequence_number = last_sequence
-                            acknowledgment_number = last_acknowledgement
-
+                ack_count -= 1
+                for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
+                    print(f"Sender pakke {i}")
+                    if i == ack_count:
+                        sequence_number = last_sequence
+                        acknowledgment_number = last_acknowledgement
+                        # Create the header
+                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
+                    # Send the packet
+                    sock.sendto(packet, address)
+                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
         return sock
     else:
