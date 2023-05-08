@@ -8,16 +8,34 @@ import sys
 import os
 import struct
 import math
-import subprocess
+import subprocess  # For running commands in the terminal
+
+
+def main_testing():
+    interface = "h1-eth0"  # h3-eth0
+
+    # Remove the existing qdisc
+    # subprocess.run(["tc", "qdisc", "del", "dev", "h1-eth0", "root"])
+    # Add a new qdisc with 10% packet loss
+    # subprocess.run(["tc", "qdisc", "add", "dev", "h1-eth0", "root", "netem", "loss", "20%"])
+
+    # Get interface name
+    # interface = subprocess.run(["ifconfig"], stdout=subprocess.PIPE).stdout.decode("utf-8")???
+
+    subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
+
+    # Add a new qdisc with 10% packet loss
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
+
+    # Emulate 5% packet reordering
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
+
+    # Emulate 2% duplicate packets
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
+
 
 # Remove the existing qdisc
 # subprocess.run(["tc", "qdisc", "del", "dev", "h1-eth0", "root"])
-
-# Add a new qdisc with 10% packet loss
-# subprocess.run(["tc", "qdisc", "add", "dev", "h1-eth0", "root", "netem", "loss", "10%"])
-
-# Emulate 10% packet loss
-# subprocess.run(["tc", "qdisc", "add", "dev", "h1-eth0", "root", "netem", "loss", "10%"])
 
 # Emulate 5% packet reordering
 # subprocess.run(["tc", "qdisc", "add", "dev", "eth0", "root", "netem", "delay", "50ms", "reorder", "5%"])
@@ -255,7 +273,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
     print("Stop and wait")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
-
+    main_testing()
     # We are the client
     if packets is not None:
         # Get the old address and port
@@ -278,6 +296,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         expected_ack = sequence_number + len(packets[0])
 
         while last_packet_sent != number_of_packets:
+            print("\n")
             try:
                 # Receive ack from server
                 raw_data, address = sock.recvfrom(receiver_window)
@@ -304,6 +323,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                                            packets[last_packet_sent])
                     # Send the packet
                     sock.sendto(packet, address)
+
+                    print(f"Sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                     # Increment the sequence number
                     last_packet_sent += 1
@@ -332,6 +353,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                                        packets[last_packet_sent])
                 # Resend the last packet
                 sock.sendto(packet, address)
+                print(f"Sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
         # We are done
         return sock
@@ -343,6 +365,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 
         # Start receiving packets
         while True:
+            print("\n")
             # Receive ack from client
             raw_data, address = sock.recvfrom(receiver_window)
             # Decode the header
@@ -548,14 +571,14 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                     # If the ack is correct, update the ack count
-                    if ack and acknowledgment_number <= expected_ack:
+                    if ack and acknowledgment_number == expected_ack:
                         # Update the last sequence number and last ack number
                         last_sequence = acknowledgment_number
                         last_acknowledgement = sequence_number
                         # Update the ack count
                         ack_count += 1
                         # Update the expected ack
-                        expected_ack = acknowledgment_number + len(packets[ack_count]) - 1
+                        expected_ack = acknowledgment_number + len(packets[ack_count])
 
                     # If all the packets we have sent have been acked, we are done
                     if last_packet_sent == ack_count:
@@ -788,8 +811,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
 
 def run_client(port, filename, reliability, mode):
-    ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
-    # ip, port, serverip, serverport = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
+    # ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
+    ip, port, serverip, serverport = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
     filename = "test.txt"
     try:
         # Set up socket
@@ -857,7 +880,7 @@ def run_client(port, filename, reliability, mode):
             # Loop until the end of the file
             while True:
                 file_raw_data = f.read(receiver_window - header_length)
-                print(file_raw_data.decode())
+                # print(file_raw_data.decode())
                 # file_raw_data = file_raw_data.decode()
                 packets_to_send.append(file_raw_data)
                 # print(file_raw_data)  # Print the raw_data we have read from the file
@@ -865,7 +888,7 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        # reliability = "go_back_n"  # For testing
+        #reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
         reliability = "selective_repeat"  # For testing
 
@@ -917,8 +940,8 @@ def run_client(port, filename, reliability, mode):
 
 
 def run_server(port, file, reliability, mode):
-    ip, port, clientip, clientport = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
-    # ip, port, clientip, clientport = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
+    # ip, port, clientip, clientport = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
+    ip, port, clientip, clientport = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
     try:
         # Set up socket
