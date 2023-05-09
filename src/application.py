@@ -895,7 +895,7 @@ def run_client(port, filename, reliability, mode):
         print(f"Total packets to send {len(packets_to_send)}")
         reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        # reliability = "selective_repeat"  # For testing
+        reliability = "selective_repeat"  # For testing
 
         start_time = time.time()
 
@@ -1006,7 +1006,7 @@ def run_server(port, file, reliability, mode):
 
         reliability = "go_back_n"  # For testing
         # reliability = "stop_and_wait"  # For testing
-        # reliability = "selective_repeat"  # For testing
+        reliability = "selective_repeat"  # For testing
 
         packets = []
 
