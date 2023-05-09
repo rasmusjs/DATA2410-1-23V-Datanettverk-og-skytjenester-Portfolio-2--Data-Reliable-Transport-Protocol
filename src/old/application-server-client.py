@@ -8,7 +8,7 @@ import sys
 
 # Default values
 formatting_line = "-" * 45  # Formatting line = -----------------------------
-default_server_save_path = "../server_files"  # Path to the folder where received files are stored
+default_server_save_path = "../received_files"  # Path to the folder where received files are stored
 default_ip = "127.0.0.1"
 default_port = 8088
 

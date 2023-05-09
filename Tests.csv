@@ -1,9 +1,9 @@
 ,Protocol,Window,RTT,Throughput
-,Stop and wait,1,25,
-,Stop and wait,1,50,
-,Stop and wait,1,100,
+,Stop and wait,1,25,104.85 Kbps
+,Stop and wait,1,50,52.85 Kbps
+,Stop and wait,1,100,26.96 Kbps
 ,,,,
-,GBN,5,25,
+,GBN,5,25,759.59 Kbps
 ,GBN,10,25,
 ,GBN,15,25,
 ,,,,
