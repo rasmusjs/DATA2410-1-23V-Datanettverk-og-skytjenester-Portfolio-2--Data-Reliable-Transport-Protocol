@@ -11,7 +11,7 @@ import math
 import subprocess  # For running commands in the terminal
 
 
-def main_testing(test_case):
+def main_testing(test_case=None):
     interface = "h1-eth0"  # h3-eth0
 
     # Remove the existing qdisc
@@ -212,7 +212,7 @@ def close_server_connection(sock, address, sequence_number, receiver_window):
     flags = set_flags(1, 1, 0, 0)  # Set the ACK flag
     packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
     sock.sendto(packet, address)
-    print("Sent ACK for FIN")
+    print("Sent FIN ACK to the client")
     # Close the connection on the
     sock.close()
 
@@ -280,6 +280,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         last_packet_sent = 0
 
         packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[last_packet_sent])
+
+        sent_time = time.time()
         # Send the packet
         sock.sendto(packet, address)
 
@@ -302,6 +304,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 
                 # If we receive a packet with the correct ack, send the next packet
                 if ack and acknowledgment_number == expected_ack:
+                    # Set a new timeout for the socket (RTT) * 4
+                    sock.settimeout((time.time() - sent_time) * 4)
                     # Increase the acknowledgment number 
                     expected_ack = acknowledgment_number + len(packets[last_packet_sent])
                     # Save the acknowledgment number
@@ -316,6 +320,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                                            packets[last_packet_sent])
                     # Send the packet
                     sock.sendto(packet, address)
+                    sent_time = time.time()
 
                     print(f"Sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
@@ -815,15 +820,15 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         return packets
 
 
-def run_client(port, filename, reliability, mode):
-    # ip, port, serverip, serverport = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
-    ip, port, serverip, serverport = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
+def run_client(client_port, filename, reliability, mode):
+    # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
+    client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
     filename = "test.txt"
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((ip, port))
-        print(f"Client started on {port}")
+        sock.bind((client_ip, client_port))
+        print(f"Client started on {client_port}")
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
@@ -831,13 +836,15 @@ def run_client(port, filename, reliability, mode):
 
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
 
-        address = (serverip, serverport)
+        address = (server_ip, server_port)
 
         # Flags for syn
         flags = set_flags(1, 0, 0, 0)
 
         # Create a header with the syn flag set
         packet = encode_header(sequence_number, 0, flags, receiver_window)
+
+        start_time = time.time()
         # Send the packet
         sock.sendto(packet, address)
 
@@ -855,6 +862,8 @@ def run_client(port, filename, reliability, mode):
 
             # If we receive a syn and ack from the server we can send a ack to the server
             if syn and ack:
+                estemated_rtt = time.time() - start_time
+                print(f"Roundtrip time: {estemated_rtt}")
                 # Save the acknowledgment number
                 acknowledgment_number_prev = acknowledgment_number
                 # Increment the sequence number by 1 to acknowledge the syn and ack
@@ -893,9 +902,9 @@ def run_client(port, filename, reliability, mode):
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        reliability = "go_back_n"  # For testing
-        # reliability = "stop_and_wait"  # For testing
-        reliability = "selective_repeat"  # For testing
+        reliability = "stop_and_wait"  # For testing
+        # reliability = "go_back_n"  # For testing
+        # reliability = "selective_repeat"  # For testing
 
         start_time = time.time()
 
@@ -936,7 +945,7 @@ def run_client(port, filename, reliability, mode):
             syn, ack, fin, rst = parse_flags(flags)
 
             # If we receive the final ack, we close the connection on the client side
-            if ack:
+            if fin and ack:
                 print("Received ACK for FIN")
                 # Close the connection on the client side once we have received an ack
                 sock.close()
@@ -951,15 +960,15 @@ def run_client(port, filename, reliability, mode):
         exit(1)
 
 
-def run_server(port, file, reliability, mode):
-    # ip, port, clientip, clientport = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
-    ip, port, clientip, clientport = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
+def run_server(server_port, file, reliability, mode):
+    # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
+    server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((ip, port))
-        print(f"Server started on {port}")
+        sock.bind((server_ip, server_port))
+        print(f"Server started on {server_port}")
 
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 64
@@ -1004,9 +1013,10 @@ def run_server(port, file, reliability, mode):
                 print("Connection established")
                 break
 
-        reliability = "go_back_n"  # For testing
-        # reliability = "stop_and_wait"  # For testing
-        reliability = "selective_repeat"  # For testing
+        reliability = "stop_and_wait"  # For testing
+
+        # reliability = "go_back_n"  # For testing
+        # reliability = "selective_repeat"  # For testing
 
         packets = []
 
