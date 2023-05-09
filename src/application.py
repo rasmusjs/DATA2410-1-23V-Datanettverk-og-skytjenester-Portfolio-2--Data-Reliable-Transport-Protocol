@@ -11,6 +11,16 @@ import math
 import subprocess  # For running commands in the terminal
 
 
+def get_iface():
+    cmd = "route | awk 'NR==3{print $NF}'"  # Get the inferface name from the second line and last element of the output of the command "route"
+    return subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+
+
+def reomve_artificial_testcase(interface):
+    # Remove the existing qdisc
+    subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
+
+
 def main_testing(test_case=None):
     interface = "h1-eth0"  # h3-eth0
 
@@ -271,16 +281,14 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
     if packets is not None:
         # Get the old address and port
         old_address = sock.getsockname()
-        # Set the socket timeout to 500 ms
-        sock_timeout = 0.5
-        # Set the new socket timeout
-        sock.settimeout(sock_timeout)
-
+        # Get the old timeout from the handshake
+        sock_timeout = sock.gettimeout()
         number_of_packets = len(packets)
         last_packet_sent = 0
 
         packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[last_packet_sent])
 
+        # Take the current time
         sent_time = time.time()
         # Send the packet
         sock.sendto(packet, address)
@@ -290,7 +298,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         # Calculating what the next ack should be from server, for validation
         expected_ack = sequence_number + len(packets[0])
 
-        while last_packet_sent != number_of_packets:
+        while last_packet_sent < number_of_packets:
             print("\n")
             try:
                 # Receive ack from server
@@ -305,7 +313,9 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # If we receive a packet with the correct ack, send the next packet
                 if ack and acknowledgment_number == expected_ack:
                     # Set a new timeout for the socket (RTT) * 4
-                    sock.settimeout((time.time() - sent_time) * 4)
+                    sock_timeout = (time.time() - sent_time) * 4
+                    print(f"Timeout: {sock_timeout}")
+                    sock.settimeout(sock_timeout)
                     # Increase the acknowledgment number 
                     expected_ack = acknowledgment_number + len(packets[last_packet_sent])
                     # Save the acknowledgment number
@@ -349,6 +359,9 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 # Create the header
                 packet = create_packet(sequence_number, acknowledgment_number + 1, 0, receiver_window,
                                        packets[last_packet_sent])
+
+                # Take the current time again
+                sent_time = time.time()
                 # Resend the last packet
                 sock.sendto(packet, address)
                 print(f"Sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -832,7 +845,7 @@ def run_client(client_port, filename, reliability, mode):
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
-        sequence_number = 1000
+        # sequence_number = 1000
 
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
 
@@ -974,7 +987,7 @@ def run_server(server_port, file, reliability, mode):
         sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 64
 
         # Variable to keep track of the previous sequence_number number
-        # sequence_number_prev = 0
+        sequence_number_prev = 0
 
         # Three-way handshake based on https://www.ietf.org/rfc/rfc793.txt page 31
         while True:
@@ -997,7 +1010,7 @@ def run_server(server_port, file, reliability, mode):
                 acknowledgment_number = sequence_number + 1
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
-                sequence_number = 0
+                # sequence_number = 0
                 # Save the sequence number
                 sequence_number_prev = sequence_number
                 # Flags for syn and ack
@@ -1252,6 +1265,9 @@ def main():
         print("Error, you must select server or client mode!")
         parser.print_help()
         sys.exit(1)
+
+    # Remove the artificial test case set by netem
+    reomve_artificial_testcase(get_iface())
 
 
 # Dette er den gamle main funksjonen, som ikke fungerer med argparse enda
