@@ -567,10 +567,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
         first_seq = sequence_number
         #  ack_count + 1 != len(packets) - 1
-        while last_packet_sent != len(packets):
+        while len(packets) > ack_count:
             print(f"Antall pakker å sende: {len(packets)}")
-            if len(packets) - 1 == ack_count:
-                break
 
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
@@ -627,18 +625,20 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 for i in range(ack_count, len(packets)):
                     if last_sequence == temp_seq:
                         last_sequence = temp_seq + len(packets[ack_count])
-                        expected_ack = last_sequence + len(packets[ack_count + 1])
+                        expected_ack = last_sequence + len(packets[ack_count])
                         sequence_number = last_sequence  # Set a new sequence number for the last acked packet
                         acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
                         break
                     temp_seq += len(packets[i])  # Set a new sequence number for the next packet
                     print(f"Ack count: {ack_count}")
                     ack_count += 1
+                ack_count += 1
 
         return sock
     else:
         # Receive the first packet
         packets = []
+        first_sequence_number = sequence_number
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
         main_testing("skip_ack")
@@ -660,7 +660,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             print(f"Prev : {prev_sequence_number + len(data)}")
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
-            if sequence_number == next_sequence_number or sequence_number == prev_sequence_number + len(data):
+            if sequence_number == first_sequence_number or sequence_number == prev_sequence_number + len(data):
                 # Update the sequence numbers
                 prev_sequence_number = sequence_number
                 next_sequence_number = sequence_number + len(data)
