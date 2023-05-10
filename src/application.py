@@ -29,7 +29,7 @@ def main_testing(test_case=None):
     # Remove the existing qdisc
     subprocess.run(["tc", "qdisc", "del", "dev", "h3-eth0", "root"])
     # Add a new qdisc with 10% packet loss
-    #subprocess.run(["tc", "qdisc", "add", "dev", "h3-eth0", "root", "netem", "loss", "10%"])
+    # subprocess.run(["tc", "qdisc", "add", "dev", "h3-eth0", "root", "netem", "loss", "10%"])
     # print("Packet loss added for server side")
 
     # Get interface name
@@ -221,7 +221,7 @@ def close_server_connection(sock, address, sequence_number, receiver_window):
     # If we receive the FIN from the client, send an ACK
     print("Received FIN from the client")
     acknowledgment_number = sequence_number + 1
-    flags = set_flags(1, 1, 0, 0)  # Set the ACK flag
+    flags = set_flags(0, 1, 1, 0)  # Set the ACK flag
     packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
     sock.sendto(packet, address)
     print("Sent FIN ACK to the client")
@@ -299,7 +299,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         # Calculating what the next ack should be from server, for validation
         expected_ack = sequence_number + len(packets[0])
 
-        while last_packet_sent < number_of_packets-1:
+        while last_packet_sent < number_of_packets - 1:
             print("\n")
             try:
                 # Receive ack from server
@@ -1049,8 +1049,8 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
 
             # If we receive a syn and ack from the server we can send a ack to the server
             if syn and ack:
-                estemated_rtt = time.time() - start_time
-                print(f"Roundtrip time: {estemated_rtt}")
+                estimated_rtt = time.time() - start_time
+                print(f"Roundtrip time: {estimated_rtt}")
                 # Save the acknowledgment number
                 acknowledgment_number_prev = acknowledgment_number
                 # Increment the sequence number by 1 to acknowledge the syn and ack
@@ -1069,11 +1069,11 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         # Get the size of the file
         filesize = os.path.getsize(filename)
         print(f"Filesize: {filesize}")
-        # Calculate the number of packets to send
-        packet_count = math.ceil(filesize / receiver_window)
 
+        # Array to store the packets
         packets_to_send = []
 
+        # The length of the header
         header_length = 12
         # Open the file and send it in chunks of 1024 bytes
         with open(filename, 'rb') as f:
@@ -1089,10 +1089,11 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
                     break
 
         print(f"Total packets to send {len(packets_to_send)}")
-        reliability = "stop_and_wait"  # For testing
+        # reliability = "stop_and_wait"  # For testing
         # reliability = "go_back_n"  # For testing
         # reliability = "selective_repeat"  # For testing
 
+        # Start the timer for the throughput
         start_time = time.time()
 
         # Send file with mode
@@ -1110,26 +1111,29 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
             sock = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
                       packets_to_send)
 
+        # Stop the timer for the throughput
         elapsed_time = time.time() - start_time
-
+        # Calculate the throughput into bits per second
         throughput = (filesize / elapsed_time) * 8
+        # Format the throughput to two decimals
         throughput_formatted = "{:.2f}".format(throughput)
 
+        # If the throughput is greater than 1 million, divide by 1 million to get Mbps
         if throughput > 1000000:
             throughput = float(throughput_formatted) / 1000000
             print(f"Throughput: {throughput:.2f} Mbps")
+        # If the throughput is greater than 1000, divide by 1000 to get Kbps
         elif throughput > 1000:
             throughput = float(throughput_formatted) / 1000
             print(f"Throughput: {throughput:.2f} Kbps")
+        # Else print the throughput in bps
         else:
             print(f"Throughput: {float(throughput_formatted):.2f} bps")
 
         # SR(sock, address, filename)
         # Start a twoway handshake to close the connection
         # Set the flag to FIN, which is the 3rd element
-        flags = set_flags(0, 0, 1, 0)
-        packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
-
+        packet = encode_header(sequence_number, acknowledgment_number, set_flags(0, 0, 1, 0), receiver_window)
         sock.sendto(packet, address)
         print("FIN sent in the packet header!")
 
@@ -1147,6 +1151,10 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
                 # Close the connection on the client side once we have received an ack
                 sock.close()
                 break
+            else:
+                # If we receive a packet with the wrong flags, we send a fin again
+                packet = encode_header(sequence_number, acknowledgment_number, set_flags(0, 0, 1, 0), receiver_window)
+                sock.sendto(packet, address)
 
     except KeyboardInterrupt:
         print("Client shutting down")
@@ -1456,8 +1464,14 @@ def main():
         print_error("Cannot run as both client and server!")
         sys.exit(1)
     if args.client:
+        if args.creliability is None:
+            print_error("Client reliability mode is not set!")
+            sys.exit(1)
         run_client(args.serverip, args.port, args.file, args.creliability, args.mode, args.window)
     elif args.server:
+        if args.sreliability is None:
+            print_error("Server reliability mode is not set!")
+            sys.exit(1)
         run_server(args.bind, args.port, args.file, args.sreliability, args.mode, args.window)
     else:
         print("Error, you must select server or client mode!")
