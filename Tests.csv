@@ -3,26 +3,26 @@
 ,Stop and wait,1,50,52.85 Kbps
 ,Stop and wait,1,100,26.96 Kbps
 ,,,,
-,GBN,5,25,759.59 Kbps
-,GBN,10,25,
-,GBN,15,25,
+,GBN,5,25,1.14 Mbps
+,GBN,10,25,2.34 Mbps
+,GBN,15,25,3.32 Mbps
 ,,,,
-,GBN,5,50,
-,GBN,10,50,
-,GBN,15,50,
+,GBN,5,50,287.18 Kbps
+,GBN,10,50,797.48 Kbps
+,GBN,15,50,1.49 Mbps
 ,,,,
-,GBN,5,100,
-,GBN,10,100,
-,GBN,15,100,
+,GBN,5,100,143.93 Kbps
+,GBN,10,100,401.26 Kbps
+,GBN,15,100,750.85 Kbps
 ,,,,
-,GBN-SR,5,25,
-,GBN-SR,10,25,
-,GBN-SR,15,25,
+,GBN-SR,5,25,570.25 Kbps
+,GBN-SR,10,25,1.44 Mbps
+,GBN-SR,15,25,3.32 Mbps
 ,,,,
-,GBN-SR,5,50,
-,GBN-SR,10,50,
-,GBN-SR,15,50,
+,GBN-SR,5,50,286.94 Kbps
+,GBN-SR,10,50,726.21 Kbps
+,GBN-SR,15,50,1.69 Mbps
 ,,,,
-,GBN-SR,5,100,
-,GBN-SR,10,100,
-,GBN-SR,15,100,
+,GBN-SR,5,100,143.87 Kbps
+,GBN-SR,10,100,365.32 Kbps
+,GBN-SR,15,100,856.01 Kbps

@@ -601,12 +601,12 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # If the ack is correct, update the ack count
                 if ack and acknowledgment_number >= expected_ack:
                     # Update the last sequence number and last ack number
-                    last_sequence = expected_ack
+                    last_sequence = acknowledgment_number
                     last_acknowledgement = sequence_number
+                    ack_count += 1
                     # Update the expected ack
                     expected_ack = acknowledgment_number + len(packets[ack_count])
                     # Update the ack count
-                    ack_count += 1
 
                 print(f"ack_count: {ack_count}")
             except TimeoutError as e:
@@ -618,20 +618,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
-                # Send packets from the last acked packet
-
-                """for i in range(ack_count - 1, min(sliding_window + ack_count - 1, len(packets))):
-                    print(f"Timeout sender pakke {i}")
-                    if i == ack_count:
-                        sequence_number = last_sequence
-                        acknowledgment_number = last_acknowledgement
-                    else:
-                        sequence_number += len(packets[i])  # Set a new sequence number for the next packet
-                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
-                    # Send the packet
-                    sock.sendto(packet, address)
-                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                    last_packet_sent = i + 1"""
 
         return sock
     else:
@@ -639,7 +625,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         packets = []
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
-        main_testing("skip_ack")
+        #main_testing("skip_ack")
         # Start receiving packets
         while True:
             print("\n")
@@ -655,6 +641,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 break
 
             print("Next seq: ", next_sequence_number)
+            print(f"Prev : {prev_sequence_number + len(data)}")
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
             if sequence_number == next_sequence_number or sequence_number == prev_sequence_number + len(data):
@@ -1118,13 +1105,13 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
                                  packets_to_send)
         elif reliability == "gbn":
             sock = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                       packets_to_send)
+                       packets_to_send, window_size)
             """sock = OLDGBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
                           packets_to_send)"""
 
-        elif reliability == "selective_repeat":
+        elif reliability == "sr":
             sock = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                      packets_to_send)
+                      packets_to_send, window_size)
 
         # Stop the timer for the throughput
         elapsed_time = time.time() - start_time
@@ -1249,7 +1236,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
             """packets = OLDGBN(sock, address, sequence_number, acknowledgment_number, flags,
                              receiver_window)  # For testing"""
 
-        elif reliability == "selective_repeat":
+        elif reliability == "sr":
             packets = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
 
         elapsed_time = time.time() - start_time
