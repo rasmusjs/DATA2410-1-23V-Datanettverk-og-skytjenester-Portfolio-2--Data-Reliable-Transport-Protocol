@@ -29,7 +29,7 @@ def main_testing(test_case=None):
     # Remove the existing qdisc
     subprocess.run(["tc", "qdisc", "del", "dev", "h3-eth0", "root"])
     # Add a new qdisc with 10% packet loss
-    subprocess.run(["tc", "qdisc", "add", "dev", "h3-eth0", "root", "netem", "loss", "10%"])
+    #subprocess.run(["tc", "qdisc", "add", "dev", "h3-eth0", "root", "netem", "loss", "10%"])
     # print("Packet loss added for server side")
 
     # Get interface name
@@ -38,7 +38,7 @@ def main_testing(test_case=None):
     print(f"Interface: {iface}")
 
     subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
-
+    """
     # Add a new qdisc with 10% packet loss
     subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
 
@@ -46,7 +46,7 @@ def main_testing(test_case=None):
     subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
 
     # Emulate 2% duplicate packets
-    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])"""
 
 
 # Default values
@@ -299,7 +299,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         # Calculating what the next ack should be from server, for validation
         expected_ack = sequence_number + len(packets[0])
 
-        while last_packet_sent < number_of_packets:
+        while last_packet_sent < number_of_packets-1:
             print("\n")
             try:
                 # Receive ack from server
@@ -557,10 +557,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         print(f"Antall pakker å sende: {len(packets)}")
 
         #  ack_count + 1 != len(packets) - 1
-        while ack_count < len(packets) - 2:
-            if last_packet_sent == len(packets) - 1:
-                break
-
+        while last_packet_sent != len(packets) - 1:
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
                 print(f"Sender pakke {i}")
@@ -589,7 +586,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
 
                 # If the ack is correct, update the ack count
-                if ack and acknowledgment_number == expected_ack:
+                if ack and acknowledgment_number >= expected_ack:
                     # Update the last sequence number and last ack number
                     last_sequence = acknowledgment_number
                     last_acknowledgement = sequence_number
@@ -1013,7 +1010,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 def run_client(server_ip, server_port, filename, reliability, mode, window_size):
     # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
     client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
-    # filename = "test.txt"
+    filename = "test.txt"
     filename = "shrek.jpg"
     try:
         # Set up socket
@@ -1093,7 +1090,7 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
 
         print(f"Total packets to send {len(packets_to_send)}")
         reliability = "stop_and_wait"  # For testing
-        reliability = "go_back_n"  # For testing
+        # reliability = "go_back_n"  # For testing
         # reliability = "selective_repeat"  # For testing
 
         start_time = time.time()
@@ -1214,7 +1211,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
                 break
 
         reliability = "stop_and_wait"  # For testing
-        reliability = "go_back_n"  # For testing
+        # reliability = "go_back_n"  # For testing
         # reliability = "selective_repeat"  # For testing
 
         packets = []
