@@ -601,11 +601,11 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # If the ack is correct, update the ack count
                 if ack and acknowledgment_number >= expected_ack:
                     # Update the last sequence number and last ack number
-                    last_sequence = acknowledgment_number
+                    last_sequence = expected_ack
                     last_acknowledgement = sequence_number
                     ack_count += 1
                     # Update the expected ack
-                    expected_ack = acknowledgment_number + len(packets[ack_count])
+                    expected_ack = expected_ack + len(packets[ack_count])
                     # Update the ack count
 
                 print(f"ack_count: {ack_count}")
