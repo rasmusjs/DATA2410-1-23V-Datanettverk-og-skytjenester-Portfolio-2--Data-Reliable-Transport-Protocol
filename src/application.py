@@ -16,37 +16,47 @@ def get_iface():
     return subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
 
 
-def reomve_artificial_testcase(interface):
-    print(interface)
-    print("Removing the interfaces" + interface)
+def reomve_artificial_testcase():
+    # Get interface name
+    interface = get_iface()
+    print(f"Removing old Interface: {interface}")
     # Remove the existing qdisc
     subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
 
 
 def main_testing(test_case=None):
-    interface = "h1-eth0"  # h3-eth0
+    # Get interface name
+    interface = get_iface()
+    print(f"Interface: {interface}")
 
     # Remove the existing qdisc
-    subprocess.run(["tc", "qdisc", "del", "dev", "h3-eth0", "root"])
+    # subprocess.run(["tc", "qdisc", "del", "dev", "h3-eth0", "root"])
     # Add a new qdisc with 10% packet loss
     # subprocess.run(["tc", "qdisc", "add", "dev", "h3-eth0", "root", "netem", "loss", "10%"])
     # print("Packet loss added for server side")
 
-    # Get interface name
-    cmd = "route | awk 'NR==3{print $NF}'"  # Get the inferface name from the second line and last element of the output of the command "route"
-    iface = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
-    print(f"Interface: {iface}")
-
+    # Remove the existing qdisc
     subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
-    """
+
+    if test_case == "skip_ack":
+        # Add a new qdisc with 10% packet loss for the outgoing packets
+        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
+        print("Running with skip_ack test case")
+    if test_case == "skip_seq":
+        # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
+        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
+        print("Running with skip_seq test case")
+
+    cmd = "tc qdisc show dev " + interface + " root"
+    print(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
     # Add a new qdisc with 10% packet loss
-    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
+    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
 
     # Emulate 5% packet reordering
-    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
+    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
 
     # Emulate 2% duplicate packets
-    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])"""
+    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
 
 
 # Default values
@@ -278,7 +288,6 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
     print("Stop and wait")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
-    main_testing()
     # We are the client
     if packets is not None:
         # Get the old address and port
@@ -535,7 +544,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
     # We are the client
     if packets is not None:
-
+        # main_testing("skip_ack")
         # Get the old address and port
         old_address = sock.getsockname()
         # Set the socket timeout to 500 ms
@@ -557,7 +566,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         print(f"Antall pakker å sende: {len(packets)}")
 
         #  ack_count + 1 != len(packets) - 1
-        while last_packet_sent != len(packets) - 1:
+        while last_packet_sent != len(packets):
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
                 print(f"Sender pakke {i}")
@@ -588,13 +597,14 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # If the ack is correct, update the ack count
                 if ack and acknowledgment_number >= expected_ack:
                     # Update the last sequence number and last ack number
-                    last_sequence = acknowledgment_number
+                    last_sequence = expected_ack
                     last_acknowledgement = sequence_number
                     # Update the ack count
                     ack_count += 1
                     # Update the expected ack
-                    expected_ack = acknowledgment_number + len(packets[ack_count])
+                    expected_ack = expected_ack + len(packets[ack_count])
 
+                print(f"ack_count: {ack_count}")
             except TimeoutError as e:
                 print(f"Timeout: {e}")
                 # Close the socket
@@ -604,10 +614,11 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
+                pass
+                """
+                # ack_count -= 1
                 # Send packets from the last acked packet
-                if ack_count > 0:
-                    ack_count -= 1
-                for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
+                for i in range(ack_count - 1, min(sliding_window + ack_count-1, len(packets))):
                     print(f"Timeout sender pakke {i}")
                     if i == ack_count:
                         sequence_number = last_sequence
@@ -616,7 +627,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
                     # Send the packet
                     sock.sendto(packet, address)
-                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")"""
 
         return sock
     else:
@@ -624,6 +635,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         packets = []
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
+        main_testing("skip_ack")
         # Start receiving packets
         while True:
             print("\n")
@@ -641,7 +653,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
             print("Next seq: ", next_sequence_number)
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
-            if sequence_number == prev_sequence_number + len(data) or next_sequence_number == sequence_number:
+            if sequence_number == next_sequence_number or sequence_number == prev_sequence_number + len(data):
                 # Update the sequence numbers
                 prev_sequence_number = sequence_number
                 next_sequence_number = sequence_number + len(data)
@@ -783,7 +795,6 @@ def SRTimerTest(sock, address, sequence_number, acknowledgment_number, flags, re
         packets = []
         packets_acked = []
         buffer = []
-
         # Start receiving packets
         while True:
             print("\n")
@@ -1009,12 +1020,13 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
 def run_client(server_ip, server_port, filename, reliability, mode, window_size):
     # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
-    client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
+    # client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
     filename = "test.txt"
-    filename = "shrek.jpg"
+    # filename = "shrek.jpg"
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        print(f"Client connecting to {server_port} with IP {server_ip}")
 
         # Random Initial Sequence Number
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
@@ -1100,8 +1112,7 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         if reliability == "stop_and_wait":
             sock = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
                                  packets_to_send)
-
-        elif reliability == "go_back_n":
+        elif reliability == "gbn":
             sock = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
                        packets_to_send)
             """sock = OLDGBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
@@ -1167,13 +1178,13 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
 
 def run_server(server_ip, server_port, file, reliability, mode, window_size):
     # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
-    server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
+    # server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((server_ip, server_port))
-        print(f"Server started on {server_port}")
+        print(f"Server started on {server_port} with IP {server_ip}")
 
         # Keep track of the sequence number, acknowledgment number, flags and receiver window
         sequence_number, acknowledgment_number, flags, receiver_window = 0, 0, 0, 64
@@ -1218,7 +1229,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
                 print("Connection established")
                 break
 
-        reliability = "stop_and_wait"  # For testing
+        # reliability = "stop_and_wait"  # For testing
         # reliability = "go_back_n"  # For testing
         # reliability = "selective_repeat"  # For testing
 
@@ -1229,7 +1240,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
         if reliability == "stop_and_wait":
             packets = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
 
-        elif reliability == "go_back_n":
+        elif reliability == "gbn":
             packets = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
             """packets = OLDGBN(sock, address, sequence_number, acknowledgment_number, flags,
                              receiver_window)  # For testing"""
@@ -1266,7 +1277,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
 
         save_path = os.path.join(os.getcwd(), "received_files")
         basename = "nyfil-test.txt"
-        basename = "shrek.jpg"
+        # basename = "shrek.jpg"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
         save_file.write(file)
@@ -1433,9 +1444,6 @@ def main():
     # Client only arguments
     client_group = parser.add_argument_group('Client')  # Create a group for the client arguments, for the help text
     client_group.add_argument('-c', '--client', action="store_true", help="Run in client mode")
-    client_group.add_argument('-a', '--serverip', type=check_ipaddress, default=default_ip,
-                              help="Bind the server to a specific ip address, in dotted decimal notation. Default %("
-                                   "default)s")
     client_group.add_argument('-r', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
                               help="Choose reliability mode for client")
     client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skipack"], help="Choose your test mode")
@@ -1443,8 +1451,6 @@ def main():
     # Server only arguments
     server_group = parser.add_argument_group('Server')  # Create a group for the server arguments, for the help text
     server_group.add_argument('-s', '--server', action="store_true", help="Run in server mode")
-    server_group.add_argument('-b', '--bind', type=check_ipaddress, default=default_ip,
-                              help="IP address to connect/bind to, in dotted decimal notation. Default %(default)s")
     server_group.add_argument('-sp', '--server_save_path', type=check_save_path, default=default_server_save_path,
                               help="Path to save items. Default %(""default)s")
 
@@ -1452,6 +1458,8 @@ def main():
                               help="Choose reliability mode for server")
 
     # Common arguments
+    parser.add_argument('-i', '--ip', type=check_ipaddress, default=default_ip,
+                        help="IP address to connect/bind to, in dotted decimal notation. Default %(default)s")
     parser.add_argument('-p', '--port', type=check_port, default=default_port,
                         help="Port to use, default default %(default)s")
     parser.add_argument('-f', '--file', type=check_file, help="Name of the file")
@@ -1467,19 +1475,19 @@ def main():
         if args.creliability is None:
             print_error("Client reliability mode is not set!")
             sys.exit(1)
-        run_client(args.serverip, args.port, args.file, args.creliability, args.mode, args.window)
+        run_client(args.ip, args.port, args.file, args.creliability, args.mode, args.window)
     elif args.server:
         if args.sreliability is None:
             print_error("Server reliability mode is not set!")
             sys.exit(1)
-        run_server(args.bind, args.port, args.file, args.sreliability, args.mode, args.window)
+        run_server(args.ip, args.port, args.file, args.sreliability, args.mode, args.window)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
         sys.exit(1)
 
     # Remove the artificial test case set by netem
-    reomve_artificial_testcase(get_iface())
+    reomve_artificial_testcase()
 
 
 # Dette er den gamle main funksjonen, som ikke fungerer med argparse enda
