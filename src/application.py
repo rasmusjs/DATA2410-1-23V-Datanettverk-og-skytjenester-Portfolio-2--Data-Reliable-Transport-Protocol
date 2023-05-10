@@ -567,6 +567,10 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
         #  ack_count + 1 != len(packets) - 1
         while last_packet_sent != len(packets):
+            print(f"Antall pakker å sende: {len(packets)}")
+            if len(packets) - 1 == ack_count:
+                break
+
             # Send the send x packets
             for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
                 print(f"Sender pakke {i}")
@@ -599,10 +603,10 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     # Update the last sequence number and last ack number
                     last_sequence = expected_ack
                     last_acknowledgement = sequence_number
+                    # Update the expected ack
+                    expected_ack = acknowledgment_number + len(packets[ack_count])
                     # Update the ack count
                     ack_count += 1
-                    # Update the expected ack
-                    expected_ack = expected_ack + len(packets[ack_count])
 
                 print(f"ack_count: {ack_count}")
             except TimeoutError as e:
@@ -614,20 +618,20 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
-                pass
-                """
-                # ack_count -= 1
                 # Send packets from the last acked packet
-                for i in range(ack_count - 1, min(sliding_window + ack_count-1, len(packets))):
+
+                """for i in range(ack_count - 1, min(sliding_window + ack_count - 1, len(packets))):
                     print(f"Timeout sender pakke {i}")
                     if i == ack_count:
                         sequence_number = last_sequence
                         acknowledgment_number = last_acknowledgement
-                        # Create the header
+                    else:
+                        sequence_number += len(packets[i])  # Set a new sequence number for the next packet
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
                     # Send the packet
                     sock.sendto(packet, address)
-                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")"""
+                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                    last_packet_sent = i + 1"""
 
         return sock
     else:
@@ -1022,7 +1026,7 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
     # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
     # client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
     filename = "test.txt"
-    # filename = "shrek.jpg"
+    filename = "shrek.jpg"
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1277,7 +1281,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
 
         save_path = os.path.join(os.getcwd(), "received_files")
         basename = "nyfil-test.txt"
-        # basename = "shrek.jpg"
+        basename = "shrek.jpg"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
         save_file.write(file)
