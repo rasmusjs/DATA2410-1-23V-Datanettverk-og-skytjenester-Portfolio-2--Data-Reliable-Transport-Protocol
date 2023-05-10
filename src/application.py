@@ -37,16 +37,16 @@ def main_testing(test_case=None):
     iface = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
     print(f"Interface: {iface}")
 
-    # subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
+    subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
 
     # Add a new qdisc with 10% packet loss
-    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
 
     # Emulate 5% packet reordering
-    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
 
     # Emulate 2% duplicate packets
-    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
+    subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
 
 
 # Default values
@@ -598,7 +598,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     # Update the expected ack
                     expected_ack = acknowledgment_number + len(packets[ack_count])
 
-
             except TimeoutError as e:
                 print(f"Timeout: {e}")
                 # Close the socket
@@ -643,11 +642,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 break
 
             print("Next seq: ", next_sequence_number)
-
-            if sequence_number == next_sequence_number:
-                print("Start or in middle")
-            if sequence_number == prev_sequence_number + len(data):
-                print("End")
 
             # If the sequence number is the next sequence number, this is true for all packets except the last
             if sequence_number == prev_sequence_number + len(data) or next_sequence_number == sequence_number:
@@ -1016,10 +1010,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         return packets
 
 
-def run_client(client_port, filename, reliability, mode):
+def run_client(server_ip, server_port, filename, reliability, mode, window_size):
     # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
     client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
-    filename = "test.txt"
+    # filename = "test.txt"
     filename = "shrek.jpg"
     try:
         # Set up socket
@@ -1166,7 +1160,7 @@ def run_client(client_port, filename, reliability, mode):
         exit(1)
 
 
-def run_server(server_port, file, reliability, mode):
+def run_server(server_ip, server_port, file, reliability, mode, window_size):
     # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
     server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
@@ -1456,6 +1450,8 @@ def main():
     parser.add_argument('-p', '--port', type=check_port, default=default_port,
                         help="Port to use, default default %(default)s")
     parser.add_argument('-f', '--file', type=check_file, help="Name of the file")
+    parser.add_argument('-w', '--window', type=check_positive_integer, default=5,
+                        help="Window size, default default %(default)s")
 
     # Parses the arguments from the user, it calls the check functions to validate the inputs given
     args = parser.parse_args()
@@ -1463,9 +1459,9 @@ def main():
         print_error("Cannot run as both client and server!")
         sys.exit(1)
     if args.client:
-        run_client(args.port, args.file, args.creliability, args.mode)
+        run_client(args.serverip, args.port, args.file, args.creliability, args.mode, args.window)
     elif args.server:
-        run_server(args.port, args.file, args.sreliability, args.mode)
+        run_server(args.bind, args.port, args.file, args.sreliability, args.mode, args.window)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
