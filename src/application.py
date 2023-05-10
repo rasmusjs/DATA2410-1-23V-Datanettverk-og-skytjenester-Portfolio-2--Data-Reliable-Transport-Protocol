@@ -565,6 +565,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         last_packet_sent = 0
         print(f"Antall pakker å sende: {len(packets)}")
 
+        first_seq = sequence_number
         #  ack_count + 1 != len(packets) - 1
         while last_packet_sent != len(packets):
             print(f"Antall pakker å sende: {len(packets)}")
@@ -619,13 +620,28 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
 
+                # Count the acks we have received
+                # Send the send x packets
+                ack_count = 0
+                temp_seq = first_seq
+                for i in range(ack_count, len(packets)):
+                    if last_sequence == temp_seq:
+                        last_sequence = temp_seq + len(packets[ack_count])
+                        expected_ack = last_sequence + len(packets[ack_count + 1])
+                        sequence_number = last_sequence  # Set a new sequence number for the last acked packet
+                        acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
+                        break
+                    temp_seq += len(packets[i])  # Set a new sequence number for the next packet
+                    print(f"Ack count: {ack_count}")
+                    ack_count += 1
+
         return sock
     else:
         # Receive the first packet
         packets = []
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
-        #main_testing("skip_ack")
+        main_testing("skip_ack")
         # Start receiving packets
         while True:
             print("\n")
