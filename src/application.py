@@ -305,7 +305,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                     # Set a new timeout for the socket (RTT) * 4
                     sock_timeout = (time.time() - sent_time) * 4
                     sock.settimeout(sock_timeout)
-                    # Increase the acknowledgment number 
+                    # Increase the acknowledgment number
                     expected_ack = acknowledgment_number + len(packets[last_packet_sent])
                     # Save the acknowledgment number
                     holding_ack = acknowledgment_number
@@ -327,15 +327,15 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 
                 else:
                     print("Received nack!")
-                    packet = create_packet(sequence_number, acknowledgment_number + 1, 0, receiver_window,
-                                           packets[last_packet_sent])
-                    last_packet_sent += 1
+                    packet = create_packet(acknowledgment_number, sequence_number - 1, 0, receiver_window,
+                                           packets[last_packet_sent - 1])
+                    last_packet_sent -= 1
 
                     # Take the current time again
                     sent_time = time.time()
                     # Resend the last packet
                     sock.sendto(packet, address)
-                    print(f"Sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                    print(f"Sendt: SEQ {acknowledgment_number}, ACK {sequence_number - 1}, {flags}, {receiver_window}")
 
 
             # Wait 500 ms before resending the packet
@@ -397,7 +397,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
             else:
                 print(
                     f"Received duplicate: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                print("Expected ack: " + str(previous_acknowledgment_number))
+                print("Expected ack: " + str(previous_acknowledgment_number + 1))
                 flags = set_flags(0, 0, 0, 0)
                 sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
 
@@ -724,10 +724,6 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
 
 def run_client(server_ip, server_port, filename, reliability, mode, window_size):
-    # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
-    # client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
-    filename = "test.txt"
-    #filename = "shrek.jpg"
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -739,20 +735,16 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         # sequence_number = 1000
 
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
-
         address = (server_ip, server_port)
-
         # Flags for syn
         flags = set_flags(1, 0, 0, 0)
-
         # Create a header with the syn flag set
         packet = encode_header(sequence_number, 0, flags, receiver_window)
-
         start_time = time.time()
         # Send the packet
-        sock.sendto(packet, address)
 
         while True:
+            sock.sendto(packet, address)
             # Receive the response from the server
             raw_data, address = sock.recvfrom(receiver_window)
             # Parse the header
@@ -792,6 +784,9 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
 
         # The length of the header
         header_length = 12
+        # Sending name of file
+        # packets_to_send.append(filename.encode())
+
         # Open the file and send it in chunks of 1024 bytes
         with open(filename, 'rb') as f:
             print(f"Reading from {filename}")
@@ -820,8 +815,6 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         elif reliability == "gbn":
             sock = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
                        packets_to_send, window_size)
-            """sock = OLDGBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                          packets_to_send)"""
 
         elif reliability == "sr":
             sock = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
@@ -980,21 +973,27 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
 
         close_server_connection(sock, address, sequence_number, receiver_window)
 
+        # basename = str(packets[0].decode())
+
         file = b""
+
         for packet in packets:
             file += packet
-            # file += #packet.decode()
+
+        """ for packet in range(0, len(packets)):
+            file += packets[packet]"""
 
         save_path = os.path.join(os.getcwd(), "received_files")
         basename = "nyfil-test.txt"
-        #basename = "shrek.jpg"
+        # basename = "shrek.jpg"
+        # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
         save_file.write(file)
         # save_file.write(file.encode())
         save_file.close()
 
-        subprocess.run("chmod 777 received_files/shrek.jpg", shell=True)
+        subprocess.run(f"chmod 666 {save_path}/{basename}", shell=True)
 
     except KeyboardInterrupt:
         print("Server shutting down")
@@ -1157,6 +1156,7 @@ def main():
     client_group.add_argument('-r', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
                               help="Choose reliability mode for client")
     client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack"], help="Choose your test mode")
+    client_group.add_argument('-f', '--file', type=check_file, help="Name of the file")
 
     # Server only arguments
     server_group = parser.add_argument_group('Server')  # Create a group for the server arguments, for the help text
@@ -1172,7 +1172,6 @@ def main():
                         help="IP address to connect/bind to, in dotted decimal notation. Default %(default)s")
     parser.add_argument('-p', '--port', type=check_port, default=default_port,
                         help="Port to use, default default %(default)s")
-    parser.add_argument('-f', '--file', type=check_file, help="Name of the file")
     parser.add_argument('-w', '--window', type=check_positive_integer, default=5,
                         help="Window size, default default %(default)s")
 
@@ -1190,7 +1189,7 @@ def main():
         if args.sreliability is None:
             print_error("Server reliability mode is not set!")
             sys.exit(1)
-        run_server(args.ip, args.port, args.file, args.sreliability, args.mode, args.window)
+        run_server(args.ip, args.port, args.server_save_path, args.sreliability, args.mode, args.window)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
