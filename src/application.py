@@ -11,12 +11,24 @@ import math
 import subprocess  # For running commands in the terminal
 
 
+# Description:
+#   Function for getting the interface name, used for adding the network emulation (loss, delay reordering) to the interface
+# Global variables:
+#   none
+# Returns:
+#   Returns the interface name as a string
 def get_iface():
     cmd = "route | awk 'NR==3{print $NF}'"  # Get the inferface name from the second line and last element of the output of the command "route"
     return subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
 
 
-def reomve_artificial_testcase():
+# Description:
+#   Function for removing the network emulation (loss, delay reordering) from the interface
+# Global variables:
+#   none
+# Returns:
+#   none
+def remove_artificial_testcase():
     # Get interface name
     interface = get_iface()
     print(f"Removing old Interface: {interface}")
@@ -24,7 +36,15 @@ def reomve_artificial_testcase():
     subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
 
 
-def main_testing(test_case=None):
+# Description:
+#   Function for adding the network emulation (loss, delay reordering) to the interface
+# Parameters:
+#   test_case: The test case to run (skip_ack, skip_seq, reorder)
+# Global variables:
+#   none
+# Returns:
+#   none
+def run_artificial_testcase(test_case=None):
     # Get interface name
     interface = get_iface()
     print(f"Interface: {interface}")
@@ -127,11 +147,6 @@ def pretty_flags(flags):
     else:
         print("Flags: 0")
 
-
-# test = set_flags(1, 0, 0, 0)
-# print(parse_flags(test))
-# print(parse_flags(0b1000))
-# print(parse_flags(0b1100))
 
 # Define the structure of the headed
 # I = 32 bits, H = 16 bits
@@ -240,41 +255,6 @@ def close_server_connection(sock, address, sequence_number, receiver_window):
 
 
 # Description:
-#   Starts the client
-# Parameters:
-#   ip: holds the ip address
-#   port: holds the port
-#   filename: holds the filename
-# Returns:
-#   None,
-def start_client(ip, port, filename):
-    pass
-    """print("Starting client")
-    try:
-        # Create a socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        # Get the size of the file
-        filesize = os.path.getsize(filename)
-
-        # Send file name and size (this should be the header)
-        sock.sendto(f"{filename}:{filesize}".encode(), (ip, port))
-        # Open the file and send it in chunks of 1024 bytes
-        with open(filename, 'rb') as f:
-            # Loop until the end of the file
-            while True:
-                raw_data = f.read(1024)
-                print(raw_data.decode())  # Print the raw_data we have read from the file
-                if not raw_data:
-                    break
-                # Send the raw_data we have read
-                sock.sendto(raw_data, (ip, port))
-    except socket.error as e:
-        print(f"Socket error: {e}")
-        exit(1)"""
-
-
-# Description:
 #   Create a random initial sequence number for the three-way handshake
 # Parameters:
 #   None
@@ -308,7 +288,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         # Calculating what the next ack should be from server, for validation
         expected_ack = sequence_number + len(packets[0])
 
-        while last_packet_sent < number_of_packets - 1:
+        while last_packet_sent < number_of_packets:
             print("\n")
             try:
                 # Receive ack from server
@@ -427,115 +407,6 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         return packets
 
 
-# Forklaring:
-# Send første pakke med sequence number 0 og ACK number 0
-# Vent på ACK eller NAK i 500ms med socket.settimeout(0.5)
-# Hvis ACK, send neste pakke
-# Hvis NAK, send samme pakke på nytt
-
-
-def GBNMarius(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
-              sliding_window=5):
-    print("Using GBN")
-    # If we are the server, packet_to_send is None
-    # If we are the client, we have packets to send (not None)
-
-    # We are the client
-    if packets is not None:
-        # Get the old address and port
-        old_address = sock.getsockname()
-        # Set the socket timeout to 500 ms
-        sock_timeout = 0.5
-        sock.settimeout(sock_timeout)
-        acknowledgment_number = acknowledgment_number
-        base = acknowledgment_number
-        sequence_number = sequence_number
-        ack_count = 0
-
-        print(f"Antall pakker å sende: {len(packets)}")
-
-        while ack_count < len(packets):
-            # Send the send x packets
-            for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
-                # Create the header
-                packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
-                sequence_number += 1
-                # Send the packet
-                sock.sendto(packet, address)
-                print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-
-            print("\n")
-            while True:
-                try:
-                    # Receive the ack
-                    raw_data, address = sock.recvfrom(64)
-                    # Decode the header
-                    sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
-                    # Parse the flags
-                    syn, ack, fin, rst = parse_flags(flags)
-                    print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-
-                    if base <= acknowledgment_number:
-                        base = acknowledgment_number + 1
-                        ack_count += 1
-                        print("ACK OK")
-                        print(ack_count)
-
-                except TimeoutError as e:
-                    print(f"Timeout: {e}")
-                    # Set the socket timeout to 500 ms
-                    sock.settimeout(sock_timeout)
-                    break
-        return sock
-    else:
-        # Receive the first packet
-        packets = []
-        next_sequence_number = acknowledgment_number
-        packet_count = 0
-
-        # Start receiving packets
-        while True:
-            print("\n")
-            # Receive ack from client
-            raw_data, address = sock.recvfrom(64)
-            # Decode the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(
-                raw_data)  # Parse the flags
-            syn, ack, fin, rst = parse_flags(flags)
-            pretty_flags(flags)
-            print(
-                f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
-
-            if fin:
-                break
-
-            print("Next seq: " + str(next_sequence_number))
-            # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
-            if sequence_number == next_sequence_number:
-                next_sequence_number += 1
-                print("Not duplicate")
-                acknowledgment_number += len(data)
-                print("Data len " + str(len(data)))
-
-                packets.append(data)
-                flags = set_flags(0, 1, 0, 0)
-                sock.sendto(
-                    encode_header(next_sequence_number, acknowledgment_number, flags, receiver_window),
-                    address)
-
-                print(
-                    f"Sent: SEQ {next_sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                packet_count += 1
-
-            else:
-                if fin:
-                    break
-
-                print("Duplicate or out-of-order packet, discarding packet until correct is recieved")
-
-        return packets
-
-
 def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
         sliding_window=5):
     print("Using GBN")
@@ -641,7 +512,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         first_sequence_number = sequence_number
         next_sequence_number = sequence_number
         prev_sequence_number = sequence_number
-        main_testing("skip_ack")
         # Start receiving packets
         while True:
             print("\n")
@@ -673,178 +543,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
             else:
                 print("Duplicate")
-
-        return packets
-
-
-def SRTimerTest(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
-                sliding_window=5):
-    print("Using SR")
-    # If we are the server, packet_to_send is None
-    # If we are the client, we have packets to send (not None)
-
-    # We are the client
-    if packets is not None:
-
-        # Get the old address and port
-        old_address = sock.getsockname()
-        # Set the socket timeout to 500 ms
-        sock_timeout = 0.5
-        # Set the new socket timeout
-        sock.settimeout(sock_timeout)
-
-        # Set the last sequence number we received
-        sequence_starting_point = sequence_number
-        # Set the last acknowledgment number we received
-        acknowledgement_starting_point = acknowledgment_number
-
-        # Total acks received
-        ack_count = 0
-
-        print(f"Antall pakker å sende: {len(packets)}")
-
-        packets_sent_and_received = [False] * len(packets)
-        expected_acks = [""] * len(packets)
-
-        minimum_sequence_number = sequence_number
-
-        starting_point = 0
-
-        total_packets_recevied = 0
-
-        #  ack_count + 1 != len(packets) - 1
-        while total_packets_recevied < len(packets):
-            print("Acked this interval: ", ack_count)
-            ack_count = 0
-            # Total packets sent, used to break out of the loop if we have sent all packets in the interval
-            packets_sent_in_interval = 0
-            sequence_number = sequence_starting_point  # Set a new sequence number for the last acked packet
-            acknowledgment_number = acknowledgement_starting_point  # Set a new acknowledgment number for the last acked packet
-
-            print("Starting point: ", starting_point)
-
-            # Send the send x packets
-            for i in range(starting_point, min(sliding_window + starting_point, len(packets))):
-                # print("\n")
-                if packets_sent_and_received[i] is False:
-                    print(f"Sending number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
-                    # Create the header
-                    packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
-                    # Send the packet
-                    sock.sendto(packet, address)
-                    print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-                    packets_sent_in_interval += 1
-
-                sequence_number += len(packets[i])  # Set a new sequence number for the next packet
-                expected_acks[i] = sequence_number  # Set the expected ack for the next packet
-                if packets_sent_and_received[i] is False:
-                    print("Expected ack: ", expected_acks[i])
-
-            # print("\n")
-            print("Packets sent in interval: ", packets_sent_in_interval)
-            while True:
-                try:
-                    print("\nSjekker for acks")
-                    # Receive the ack
-                    raw_data, address = sock.recvfrom(receiver_window)
-                    # Decode the header
-                    sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
-                    # Parse the flags
-                    syn, ack, fin, rst = parse_flags(flags)
-                    print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
-
-                    for i in range(starting_point, len(packets)):
-                        print(
-                            f"Checking packet number: {i + 1} of {min(sliding_window + starting_point, len(packets))}")
-                        if expected_acks[i] == "":
-                            print("Expected ack is empty, breaking")
-                            break
-                        # print("Printing i: ", i)
-                        # print(f"Sjekker for match {expected_acks[i]}")
-                        if ack and acknowledgment_number == expected_acks[i] and packets_sent_and_received[i] is False:
-                            print(f"Fant match {expected_acks[i]}")
-                            packets_sent_and_received[i] = True
-                            # Update the last sequence number and last ack number
-                            # Update the ack countk
-                            total_packets_recevied += 1
-                            ack_count += 1
-                            break
-                            # Update the expected ack
-
-                        # expected_ack = acknowledgment_number + len(packets[ack_count])
-
-                        # If all the packets we have sent have been acked, we are done
-                    print("Packets acked: ", ack_count)
-                    if packets_sent_in_interval == ack_count:
-                        minimum_sequence_number = sequence_number
-                        sequence_starting_point = acknowledgment_number
-                        acknowledgement_starting_point = sequence_number
-                        starting_point += ack_count
-                        print("New starting point: ", starting_point)
-                        # Send packets from the last acked packet
-                        print("All packets received")
-                        break
-
-                except TimeoutError as e:
-                    print(f"Timeout: {e}")
-                    # Close the socket
-                    sock.close()
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    # Bind the socket to the old bind
-                    sock.bind(old_address)
-                    # Set the socket timeout to 500 ms
-                    sock.settimeout(sock_timeout)
-                    break
-
-        return sock
-    else:
-        # Receive the first packet
-        packets = []
-        packets_acked = []
-        buffer = []
-        # Start receiving packets
-        while True:
-            print("\n")
-            # Receive ack from client
-            raw_data, address = sock.recvfrom(receiver_window)
-            # Decode the header
-            sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
-            # Parse the flags
-            syn, ack, fin, rst = parse_flags(flags)
-            print(
-                f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}, Len {len(data)}", )
-
-            #  If the size of the buffer is the same as the sliding window, we can sort the buffer with the packets
-            if len(buffer) == sliding_window or fin:  # If the buffer is full, or we have received the last packet
-                buffer.sort(key=lambda x: x[0])  # Sort the buffer by sequence number
-                for i in range(len(buffer)):  # Loop through the buffer
-                    if len(buffer[i][1]) > 0:  # If the packet is not empty
-                        print(buffer[i][0])
-                        packets.append(buffer[i][1])  # Add the packet to the packets list
-                buffer = []  # Empty the buffer
-
-            if fin:  # If we have received the last packet exit the loop
-                break
-
-            # Mark the packet as new
-            new_packet = True
-
-            # Check if the packet is a duplicate packet
-            for i in range(len(packets_acked)):
-                if sequence_number == packets_acked[i]:
-                    new_packet = False
-                    print("Duplicate packet")
-                    break
-
-            # Acknowledge the packet if it's new
-            if new_packet:
-                print("New packet")
-                buffer.append((sequence_number, data))  # Add the packet to the buffer
-                next_acknowledgment_number = sequence_number + len(data)  # Increment the sequence number
-                sequence_number = acknowledgment_number + 1  # Increment the sequence number
-                flags = set_flags(0, 1, 0, 0)  # Set the flags for ack
-                sock.sendto(encode_header(sequence_number, next_acknowledgment_number, flags, receiver_window), address)
-                print(f"Sent: SEQ {sequence_number}, ACK {next_acknowledgment_number}, {flags}, {receiver_window}")
 
         return packets
 
@@ -1029,7 +727,7 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
     # client_ip, port, server_ip, server_port = "127.0.0.1", 4321, "127.0.0.1", 1234  # For testing
     # client_ip, client_port, server_ip, server_port = "10.0.0.1", 4321, "10.0.1.2", 1234  # For testing
     filename = "test.txt"
-    filename = "shrek.jpg"
+    #filename = "shrek.jpg"
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1187,6 +885,11 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
     # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
     # server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
+    if mode == "loss":
+        run_artificial_testcase("loss")
+    if mode == "skip_ack":
+        run_artificial_testcase("skip_ack")
+
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1284,7 +987,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
 
         save_path = os.path.join(os.getcwd(), "received_files")
         basename = "nyfil-test.txt"
-        basename = "shrek.jpg"
+        #basename = "shrek.jpg"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
         save_file.write(file)
@@ -1453,7 +1156,7 @@ def main():
     client_group.add_argument('-c', '--client', action="store_true", help="Run in client mode")
     client_group.add_argument('-r', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
                               help="Choose reliability mode for client")
-    client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skipack"], help="Choose your test mode")
+    client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack"], help="Choose your test mode")
 
     # Server only arguments
     server_group = parser.add_argument_group('Server')  # Create a group for the server arguments, for the help text
@@ -1493,18 +1196,9 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # Remove the artificial test case set by netem
-    reomve_artificial_testcase()
-
-
-# Dette er den gamle main funksjonen, som ikke fungerer med argparse enda
-# if args.server:
-#    start_server(args.server_ip, args.port, args.server_save_path)
-#    # End of server mode
-#
-#   if args.client:
-#    start_client(args.client_ip, args.port, args.filename)
-#    # End of client mode
+    if args.mode is not None:  # If the user has set a test mode i.e. loss or skip_ack remove the artificial test case
+        # Remove the artificial test case set by netem
+        remove_artificial_testcase()
 
 
 # Start the main function
