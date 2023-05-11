@@ -990,8 +990,8 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
             file += packets[packet]"""
 
         save_path = os.path.join(os.getcwd(), "received_files")
-        basename = "nyfil-test.txt"
-        #basename = "shrek.jpg"
+        #basename = "nyfil-test.txt"
+        basename = "shrek.jpg"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
