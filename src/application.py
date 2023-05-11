@@ -710,6 +710,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
             # Acknowledge the packet if it's new
             if new_packet:
+                packets_acked.append(sequence_number)  # Add the packet to the list of packets that have been acked
                 print("New packet")
                 buffer.append((sequence_number, data))  # Add the packet to the buffer
                 next_acknowledgment_number = sequence_number + len(data)  # Increment the sequence number
@@ -717,6 +718,13 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 flags = set_flags(0, 1, 0, 0)  # Set the flags for ack
                 sock.sendto(encode_header(sequence_number, next_acknowledgment_number, flags, receiver_window), address)
                 print(f"Sent: SEQ {sequence_number}, ACK {next_acknowledgment_number}, {flags}, {receiver_window}")
+            else:
+                next_acknowledgment_number = sequence_number + len(data)  # Increment the sequence number
+                sequence_number = acknowledgment_number + 1  # Increment the sequence number
+                flags = set_flags(0, 1, 0, 0)  # Set the flags for ack
+                sock.sendto(encode_header(sequence_number, next_acknowledgment_number, flags, receiver_window), address)
+                print(f"Sent: SEQ {sequence_number}, ACK {next_acknowledgment_number}, {flags}, {receiver_window}")
+
 
         return packets
 
@@ -982,8 +990,8 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
             file += packets[packet]"""
 
         save_path = os.path.join(os.getcwd(), "received_files")
-        #basename = "nyfil-test.txt"
-        basename = "shrek.jpg"
+        basename = "nyfil-test.txt"
+        #basename = "shrek.jpg"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
