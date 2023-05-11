@@ -428,6 +428,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         ack_count = 0
         # Total packets sent, used to break out of the loop if we have sent all packets in the interval
         last_packet_sent = 0
+        timeout_count = 0
         print(f"Antall pakker å sende: {len(packets)}")
         first_seq = sequence_number
         while len(packets) > ack_count:
@@ -483,20 +484,23 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
                 # Count the acks we have received
                 # Send the send x packets
-                ack_count = seq_archive[last_packet_sent - 1]
-                """ ack_count = 0
-                 temp_seq = first_seq
-                 for i in range(ack_count, len(packets)):
-                     if last_sequence == temp_seq:
-                         last_sequence = temp_seq + len(packets[ack_count])
-                         expected_ack = last_sequence + len(packets[ack_count])
-                         sequence_number = last_sequence  # Set a new sequence number for the last acked packet
-                         acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
-                         break
-                     temp_seq += len(packets[i])  # Set a new sequence number for the next packet
-                     print(f"Ack count: {ack_count}")
-                     ack_count += 1
-                 ack_count += 1"""
+                ack_count = last_packet_sent
+                timeout_count += 1
+                if timeout_count == 3:
+                    ack_count = 0
+                    temp_seq = first_seq
+                    for i in range(ack_count, len(packets)):
+                        if last_sequence == temp_seq:
+                            last_sequence = temp_seq + len(packets[ack_count])
+                            expected_ack = last_sequence + len(packets[ack_count])
+                            sequence_number = last_sequence  # Set a new sequence number for the last acked packet
+                            acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
+                            break
+                        temp_seq += len(packets[i])  # Set a new sequence number for the next packet
+                        print(f"Ack count: {ack_count}")
+                        ack_count += 1
+                    ack_count += 1
+                    timeout_count = 0
 
         return sock
 
