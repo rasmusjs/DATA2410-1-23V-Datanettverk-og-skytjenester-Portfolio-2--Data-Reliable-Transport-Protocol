@@ -284,6 +284,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         sock.sendto(packet, address)
         last_packet_sent = 1
         print(f"Første sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+        old_sent = None
 
         # Calculating what the next ack should be from server, for validation
         expected_ack = sequence_number + len(packets[0])
@@ -319,6 +320,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                                            packets[last_packet_sent])
                     # Send the packet
                     sock.sendto(packet, address)
+                    old_sent = packet
                     sent_time = time.time()
 
                     print(f"Sendt: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -326,16 +328,10 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                     last_packet_sent += 1
 
                 else:
-                    print("Received nack!")
-                    packet = create_packet(acknowledgment_number, sequence_number - 1, 0, receiver_window,
-                                           packets[last_packet_sent - 1])
-                    last_packet_sent -= 1
+                    print("Wrong ack number, sending " )
+                    # Send the old packet again
+                    sock.sendto(old_sent, address)
 
-                    # Take the current time again
-                    sent_time = time.time()
-                    # Resend the last packet
-                    sock.sendto(packet, address)
-                    print(f"Sendt: SEQ {acknowledgment_number}, ACK {sequence_number - 1}, {flags}, {receiver_window}")
 
 
             # Wait 500 ms before resending the packet
@@ -392,7 +388,9 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                 packets.append(data)
                 # Send the ack
                 flags = set_flags(0, 1, 0, 0)
-                sock.sendto(encode_header(sequence_number, acknowledgment_number, flags, receiver_window), address)
+                packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
+                sock.sendto(packet, address)
+                old_sent_server = packet
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             else:
                 print(
@@ -984,8 +982,8 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
             file += packets[packet]"""
 
         save_path = os.path.join(os.getcwd(), "received_files")
-        basename = "nyfil-test.txt"
-        # basename = "shrek.jpg"
+        #basename = "nyfil-test.txt"
+        basename = "shrek.jpg"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
