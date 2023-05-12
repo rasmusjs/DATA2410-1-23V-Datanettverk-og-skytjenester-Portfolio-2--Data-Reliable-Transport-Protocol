@@ -484,23 +484,19 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
                 # Count the acks we have received
                 # Send the send x packets
-                ack_count = last_packet_sent
-                timeout_count += 1
-                if timeout_count == 3:
-                    ack_count = 0
-                    temp_seq = first_seq
-                    for i in range(ack_count, len(packets)):
-                        if last_sequence == temp_seq:
-                            last_sequence = temp_seq + len(packets[ack_count])
-                            expected_ack = last_sequence + len(packets[ack_count])
-                            sequence_number = last_sequence  # Set a new sequence number for the last acked packet
-                            acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
-                            break
-                        temp_seq += len(packets[i])  # Set a new sequence number for the next packet
-                        print(f"Ack count: {ack_count}")
-                        ack_count += 1
+                temp_seq = first_seq
+                ack_count = 0
+                for i in range(ack_count, len(packets)):
+                    if last_sequence == temp_seq:
+                        last_sequence = temp_seq + len(packets[i])
+                        expected_ack = last_sequence + len(packets[i])
+                        sequence_number = last_sequence  # Set a new sequence number for the last acked packet
+                        acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
+                        break
+                    temp_seq += len(packets[i])  # Set a new sequence number for the next packet
+                    print(f"Ack count: {ack_count}")
                     ack_count += 1
-                    timeout_count = 0
+                ack_count += 1
 
         return sock
 
@@ -992,8 +988,8 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
             file += packets[packet]"""
 
         save_path = os.path.join(os.getcwd(), "received_files")
-        # basename = "nyfil-test.txt"
-        basename = "shrek.jpg"
+        basename = "nyfil-test.txt"
+        #basename = "shrek.jpg"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
