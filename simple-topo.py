@@ -25,8 +25,8 @@ class NetworkTopo( Topo ):
         h1=self.addHost("h1",ip=None)
         r2=self.addNode("r2",cls=LinuxRouter,ip=None)
         h3=self.addHost("h3",ip=None)
-        self.addLink(h1,r2,params1={ 'ip' : '10.0.0.1/24' },params2={ 'ip' : '10.0.0.2/24' }, bw=100, delay='6.25ms')#,max_queue_size=834, use_htb=True)
-        self.addLink(r2,h3,params1={ 'ip' : '10.0.1.1/24' },params2={ 'ip' : '10.0.1.2/24' }, bw=100, delay='6.25ms', max_queue_size=170)#, max_queue_size=834, use_htb=True)
+        self.addLink(h1,r2,params1={ 'ip' : '10.0.0.1/24' },params2={ 'ip' : '10.0.0.2/24' }, bw=100, delay='25ms')#,max_queue_size=834, use_htb=True)
+        self.addLink(r2,h3,params1={ 'ip' : '10.0.1.1/24' },params2={ 'ip' : '10.0.1.2/24' }, bw=100, delay='25ms', max_queue_size=170)#, max_queue_size=834, use_htb=True)
 
 topo = NetworkTopo()
 net = Mininet( topo=topo, link=TCLink )

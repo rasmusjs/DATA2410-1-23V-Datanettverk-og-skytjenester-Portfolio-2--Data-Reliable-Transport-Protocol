@@ -57,12 +57,15 @@ def run_artificial_testcase(test_case=None):
 
     if test_case == "skip_ack" or test_case == "loss":
         # Add a new qdisc with 10% packet loss for the outgoing packets
-        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
+        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "5%"])
         print("Running with skip_ack test case")
     if test_case == "skip_seq":
         # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
         subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
         print("Running with skip_seq test case")
+    if test_case == "duplicate":
+        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "5%"])
+        print("Running with duplicate test case")
 
     cmd = "tc qdisc show dev " + interface + " root"
     print(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
@@ -494,7 +497,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                         acknowledgment_number = last_acknowledgement  # Set a new acknowledgment number for the last acked packet
                         break
                     temp_seq += len(packets[i])  # Set a new sequence number for the next packet
-                    print(f"Ack count: {ack_count}")
                     ack_count += 1
                 ack_count += 1
 
@@ -728,6 +730,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
 
 def run_client(server_ip, server_port, filename, reliability, mode, window_size):
+    if mode is not None:
+        run_artificial_testcase(mode)
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -882,10 +886,8 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
     # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
     # server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
-    if mode == "loss":
-        run_artificial_testcase("loss")
-    if mode == "skip_ack":
-        run_artificial_testcase("skip_ack")
+    if mode is not None:
+        run_artificial_testcase(mode)
 
     try:
         # Set up socket
@@ -989,7 +991,7 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
 
         save_path = os.path.join(os.getcwd(), "received_files")
         basename = "nyfil-test.txt"
-        #basename = "shrek.jpg"
+        basename = "shrek.jpg"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
@@ -1159,8 +1161,6 @@ def main():
     client_group.add_argument('-c', '--client', action="store_true", help="Run in client mode")
     client_group.add_argument('-r', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
                               help="Choose reliability mode for client")
-    client_group.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack", "skip_seq"],
-                              help="Choose your test mode")
     client_group.add_argument('-f', '--file', type=check_file, help="Name of the file")
 
     # Server only arguments
@@ -1179,7 +1179,8 @@ def main():
                         help="Port to use, default default %(default)s")
     parser.add_argument('-w', '--window', type=check_positive_integer, default=5,
                         help="Window size, default default %(default)s")
-
+    parser.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack", "skip_seq", "duplicate"],
+                        help="Choose your test mode")
     # Parses the arguments from the user, it calls the check functions to validate the inputs given
     args = parser.parse_args()
     if args.client and args.server:
