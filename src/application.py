@@ -7,6 +7,12 @@ import os
 import struct
 import subprocess  # For running commands in the terminal
 
+# Default values
+formatting_line = "-" * 45  # Formatting line = -----------------------------
+default_server_save_path = "received_files"  # Path to the folder where received files are stored
+default_ip = "127.0.0.1"
+default_port = 8088
+
 
 # Description:
 #   Function for getting the interface name, used for adding the network emulation (loss, delay reordering) to the interface
@@ -44,46 +50,25 @@ def remove_artificial_testcase():
 def run_artificial_testcase(test_case=None):
     # Get interface name
     interface = get_iface()
-    print(f"Interface: {interface}")
-
-    # Remove the existing qdisc
-    # subprocess.run(["tc", "qdisc", "del", "dev", "h3-eth0", "root"])
-    # Add a new qdisc with 10% packet loss
-    # subprocess.run(["tc", "qdisc", "add", "dev", "h3-eth0", "root", "netem", "loss", "10%"])
-    # print("Packet loss added for server side")
-
-    # Remove the existing qdisc
+    # Remove the existing qdisc if it exists
+    print(f"Removing old qdisc on {interface}")
     subprocess.run(["tc", "qdisc", "del", "dev", interface, "root"])
 
+    # Add a new qdisc with 5% packet loss for the outgoing packets
     if test_case == "skip_ack" or test_case == "loss":
-        # Add a new qdisc with 10% packet loss for the outgoing packets
+        print("Adding 5% packet loss to the outgoing packets")
         subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "5%"])
-        print("Running with skip_ack test case")
+    # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
     if test_case == "skip_seq":
-        # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
+        print("Adding reordering to the outgoing packets to simulate out of order packets at 5%")
         subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
-        print("Running with skip_seq test case")
+    # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
     if test_case == "duplicate":
+        print("Adding 5% packet duplication to the outgoing packets")
         subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "5%"])
-        print("Running with duplicate test case")
 
-    cmd = "tc qdisc show dev " + interface + " root"
-    print(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
-    # Add a new qdisc with 10% packet loss
-    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "10%"])
-
-    # Emulate 5% packet reordering
-    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
-
-    # Emulate 2% duplicate packets
-    # subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "duplicate", "2%"])
-
-
-# Default values
-formatting_line = "-" * 45  # Formatting line = -----------------------------
-default_server_save_path = "received_files"  # Path to the folder where received files are stored
-default_ip = "127.0.0.1"
-default_port = 8088
+    print(
+        f"Added {subprocess.check_output(f'tc qdisc show dev {interface} root', shell=True).decode('utf-8').strip()} to {interface}")
 
 
 # Description:
@@ -145,7 +130,7 @@ def pretty_flags(flags):
         print(
             f"Flags: {'syn' if syn else ''}{'ack' if ack else ''}{'fin' if fin else ''}{'rst' if rst else ''}")
     else:
-        print("Flags: 0")
+        print("No flags")
 
 
 # Define the structure of the headed
@@ -186,60 +171,14 @@ def decode_header(header):
 # Returns:
 #   Returns the header as a tuple
 def strip_packet(raw_data):
-    # Get header from the packet (first 12 bytes)
-    header = raw_data[:12]
-    # Unpack the header fields
-    sequence_number, acknowledgment_number, flags, receiver_window = decode_header(header)
-    # Keep only the raw_data from the packet (after the header)
-    data = raw_data[12:]
-    # Return the header fields and the raw_data decoded as a tuple
-    return sequence_number, acknowledgment_number, flags, receiver_window, data
+    # Get header from the packet (first 12 bytes) and unpack the header fields
+    sequence_number, acknowledgment_number, flags, receiver_window = decode_header(raw_data[:12])
+    # Return the header fields and the raw_data decoded as a tuple, the raw data is the payload
+    return sequence_number, acknowledgment_number, flags, receiver_window, raw_data[12:]
 
 
 def create_packet(sequence_number, acknowledgment_number, flags, window, data):
-    header = encode_header(sequence_number, acknowledgment_number, flags, window)
-    return header + data
-
-
-# Description:
-#  Handles a client connection, receives a file from the client and saves it to the save path folder
-# Parameters:
-#   sock: holds the socket
-#   save_path: holds the save path
-# Returns:
-#   None
-def server_handle_client(sock, save_path):
-    pass
-    """
-    # Receive filename and filesize (this is supposed to be the header)
-    raw_data, address = sock.recvfrom(1024)
-    filename, filesize = raw_data.decode().split(':')  # Extract filename and filesize
-    filesize = int(filesize)
-    basename = os.path.basename(filename)  # Extract filename from the path
-    i = 1  # Counter for duplicate filenames
-
-    # Check if a file exists on the server (in the save path folder) and add a number to the end if it does
-    while os.path.exists(os.path.join(save_path, basename)):
-        # Split the filename and add a number to the end
-        basename = f"{os.path.splitext(basename)[0]}_{i}{os.path.splitext(basename)[1]}"
-        i += 1
-    print(f'Receiving file {basename}')
-
-    received_bytes = 0  # Counter for received bytes
-
-    # Fjern kommentarer for å lagre til fil, dette er kun for testing
-    # with open(os.path.join(save_path, basename), 'wb') as f:
-    while received_bytes < filesize:
-        # Receive raw_data
-        raw_data, address = sock.recvfrom(1024)
-        print(raw_data.decode())
-        # Fjern kommentarer for å lagre til fil, dette er kun for testing
-        # f.write(raw_data) # Write raw_data to file
-        received_bytes += len(raw_data)"""
-
-
-def read_file(filename):
-    return open(filename, 'rb')
+    return encode_header(sequence_number, acknowledgment_number, flags, window) + data
 
 
 def close_server_connection(sock, address, sequence_number, receiver_window):
