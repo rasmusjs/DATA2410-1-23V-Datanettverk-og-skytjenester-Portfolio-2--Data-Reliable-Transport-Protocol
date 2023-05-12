@@ -222,7 +222,13 @@ def random_isn():
     return random.randint(0, 2 ** 32 - 1)
 
 
-def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None):
+def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
+                  skip_a_packet=False):
+    # Test case to skip a packet
+    test_case_packet_counter = 0
+    test_case_packet_skip = 10
+    test_case_done = False
+
     print("Stop and wait")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
@@ -230,10 +236,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         # We are the client
         # Get the old timeout from the handshake
         sock_timeout = sock.gettimeout()
-        number_of_packets = len(packets)
-
+        # Create the packet to send, and to save the last sent packet as a variable, for resending
         packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[0])
-
         # Take the current time
         sent_time = time.time()
         # Send the packet
@@ -271,6 +275,14 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                     # Create the header
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window,
                                            packets[last_packet_sent])
+
+                    # If we are testing, skip the last packet
+                    if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet:
+                        test_case_done = True
+                        print(f"Skipped packet {test_case_packet_skip}")
+                        continue
+                    test_case_packet_counter += 1
+
                     # Send the packet
                     sock.sendto(packet, address)
                     print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -278,7 +290,6 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
                     sent_time = time.time()
                     # Increment the sequence number
                     last_packet_sent += 1
-
                 else:
                     print("Wrong ack number, resending")
                     # Send the old packet again
@@ -300,9 +311,12 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
     # Else we are the server
     else:
         # Receive the first packet
+        # Create a list to hold the packets
         packets = []
+        # Initialize the acknowledgement number
         previous_acknowledgment_number = acknowledgment_number - 1
-        old_sent_server = None
+        # Used to save the last sent ack as a variable, for resending
+        packet = None
 
         # Start receiving packets
         while True:
@@ -314,31 +328,40 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
             # Parse the flags
             syn, ack, fin, rst = parse_flags(flags)
             print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+            print(f"Expected ACK: {previous_acknowledgment_number + 1}")
 
-            # If the sequence number is equal to the old acknowledgment number, we have received the correct packet
-            print(f"SEQ: {sequence_number}, ACK: {acknowledgment_number}, PREV ACK: {previous_acknowledgment_number}")
-
+            # If the acknowledgement is equal to the old acknowledgement number, we have received the correct packet
             if acknowledgment_number == previous_acknowledgment_number + 1:
+                # Update the new expected acknowledgement number
                 previous_acknowledgment_number = acknowledgment_number
-
+                # Save the acknowledgement number for creating new sequence number
                 holding_ack = acknowledgment_number
-
+                # Increase the acknowledgment number by the length of the data
                 acknowledgment_number = sequence_number + len(data)
+                # create new ssequnce number
                 sequence_number = holding_ack
-
-                # Add the data to the packets list
+                # Add the data to the packet list
                 packets.append(data)
-                # Send the ack
+                # Set flags
                 flags = set_flags(0, 1, 0, 0)
+                # Create header
                 packet = encode_header(sequence_number, acknowledgment_number, flags, receiver_window)
+
+                # If we are testing, skip the last packet
+                if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet:
+                    test_case_done = True
+                    print(f"Skipped packet {test_case_packet_skip}")
+                    continue
+                test_case_packet_counter += 1
+
+                # Send the ack
                 sock.sendto(packet, address)
-                old_sent_server = packet
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
             else:
                 print(f"Received duplicate or wrong package: SEQ {sequence_number}, ACK {acknowledgment_number}")
                 print("Expected ack: " + str(previous_acknowledgment_number + 1))
-                flags = set_flags(0, 0, 0, 0)
-                sock.sendto(old_sent_server, address)
+                # Did not receive the correct packet, resend the last ack
+                sock.sendto(packet, address)
 
             # If the fin flag is set, we are done
             if fin:
@@ -347,7 +370,7 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 
 
 def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
-        sliding_window=5):
+        sliding_window=5, skip_a_packet=False):
     print("Using GBN")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
@@ -445,7 +468,6 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 ack_count += 1
 
         return sock
-
     else:
         # Receive the first packet
         packets = []
@@ -491,10 +513,15 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 # the correct place in the receive buffer. Combine both GBN and SR to optimise the performance.
 
 def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
-       sliding_window=5):
+       sliding_window=5, skip_a_packet=False):
     print("Using SR")
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
+
+    # Test case to skip a packet
+    test_case_packet_counter = 0
+    test_case_packet_skip = 10
+    test_case_done = False
 
     # We are the client
     if packets is not None:
@@ -543,6 +570,14 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     print(f"Sending number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
                     # Create the header
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
+
+                    # If we are testing, skip the last packet
+                    if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet is True:
+                        test_case_done = True
+                        print(f"Skipped packet {test_case_packet_skip}")
+                        continue
+                    test_case_packet_counter += 1
+
                     # Send the packet
                     sock.sendto(packet, address)
                     print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -634,10 +669,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 for i in range(len(buffer)):  # Loop through the buffer
                     if len(buffer[i][1]) > 0:  # If the packet is not empty
                         print(buffer[i][0])
-                        packets.append(buffer[i][1])  # Add the packet to the packets list
+                        packets.append(buffer[i][1])  # Add the packet to the packet list
                 buffer = []  # Empty the buffer
 
-            if fin:  # If we have received the last packet exit the loop
+            if fin:  # If we have received the last packet, exit the loop
                 break
 
             # Mark the packet as new
@@ -658,6 +693,14 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 next_acknowledgment_number = sequence_number + len(data)  # Increment the sequence number
                 sequence_number = acknowledgment_number + 1  # Increment the sequence number
                 flags = set_flags(0, 1, 0, 0)  # Set the flags for ack
+
+                # If we are testing, skip the last packet
+                if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet is True:
+                    test_case_done = True
+                    print(f"Skipped packet {test_case_packet_skip}")
+                    continue
+                test_case_packet_counter += 1
+
                 sock.sendto(encode_header(sequence_number, next_acknowledgment_number, flags, receiver_window), address)
                 print(f"Sent: SEQ {sequence_number}, ACK {next_acknowledgment_number}, {flags}, {receiver_window}")
             else:
@@ -670,7 +713,9 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         return packets
 
 
-def run_client(server_ip, server_port, filename, reliability, mode, window_size):
+def run_client(server_ip, server_port, filename, reliability, mode, sliding_window, skip_a_packet):
+    print(f"Skip a packet is {skip_a_packet}")
+
     if mode is not None:
         run_artificial_testcase(mode)
     try:
@@ -690,7 +735,7 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         # Create a header with the syn flag set
         packet = encode_header(sequence_number, 0, flags, receiver_window)
         start_time = time.time()
-        # Send the packetshrek
+        # Send the packet
 
         while True:
             sock.sendto(packet, address)
@@ -729,12 +774,12 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         print(f"Filesize: {filesize}")
 
         # Array to store the packets
-        packets_to_send = []
+        packets = []
 
         # The length of the header
         header_length = 12
         # Sending name of file
-        # packets_to_send.append(filename.encode())
+        #packets.append(filename.encode())
 
         # Open the file and send it in chunks of 1024 bytes
         with open(filename, 'rb') as f:
@@ -744,12 +789,12 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
                 file_raw_data = f.read(receiver_window - header_length)
                 # print(file_raw_data.decode())
                 # file_raw_data = file_raw_data.decode()
-                packets_to_send.append(file_raw_data)
+                packets.append(file_raw_data)
                 # print(file_raw_data)  # Print the raw_data we have read from the file
                 if not file_raw_data:
                     break
 
-        print(f"Total packets to send {len(packets_to_send)}")
+        print(f"Total packets to send {len(packets)}")
         # reliability = "stop_and_wait"  # For testing
         # reliability = "go_back_n"  # For testing
         # reliability = "selective_repeat"  # For testing
@@ -759,15 +804,15 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
 
         # Send file with mode
         if reliability == "stop_and_wait":
-            sock = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                                 packets_to_send)
+            sock = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets,
+                                 skip_a_packet)
         elif reliability == "gbn":
-            sock = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                       packets_to_send, window_size)
+            sock = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets,
+                       sliding_window, skip_a_packet)
 
         elif reliability == "sr":
-            sock = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window,
-                      packets_to_send, window_size)
+            sock = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets,
+                      sliding_window, skip_a_packet)
 
         # Stop the timer for the throughput
         elapsed_time = time.time() - start_time
@@ -823,7 +868,7 @@ def run_client(server_ip, server_port, filename, reliability, mode, window_size)
         exit(1)
 
 
-def run_server(server_ip, server_port, file, reliability, mode, window_size):
+def run_server(server_ip, server_port, file, reliability, mode, sliding_window, skip_a_packet=None):
     # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
     # server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
@@ -888,20 +933,30 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
         start_time = time.time()
         # Send file with mode
         if reliability == "stop_and_wait":
-            packets = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
+            packets = stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, None,
+                                    skip_a_packet)
 
         elif reliability == "gbn":
-            packets = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
-            """packets = OLDGBN(sock, address, sequence_number, acknowledgment_number, flags,
-                             receiver_window)  # For testing"""
+            packets = GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, None,
+                          sliding_window,
+                          skip_a_packet)
 
         elif reliability == "sr":
-            packets = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window)
+            packets = SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, None,
+                         sliding_window,
+                         skip_a_packet)
 
         elapsed_time = time.time() - start_time
         filesize = 0
+
+        #basename = str(packets[0].decode())
+
+        """
         for packet in packets:
-            filesize += len(packet)
+            filesize += len(packet)"""
+
+        for packet in range(1, len(packets)):
+            filesize += len(packets[packet])
 
         throughput = (filesize / elapsed_time) * 8
         throughput_formatted = "{:.2f}".format(throughput)
@@ -931,8 +986,8 @@ def run_server(server_ip, server_port, file, reliability, mode, window_size):
             file += packets[packet]"""
 
         save_path = os.path.join(os.getcwd(), "received_files")
-        basename = "nyfil-test.txt"
-        basename = "shrek.jpg"
+
+        basename = "fil.jpg"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
@@ -1120,8 +1175,10 @@ def main():
                         help="Port to use, default default %(default)s")
     parser.add_argument('-w', '--window', type=check_positive_integer, default=5,
                         help="Window size, default default %(default)s")
-    parser.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack", "skip_seq", "duplicate"],
+    parser.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack"],
                         help="Choose your test mode")
+    parser.add_argument('-tn', '--tcmode', type=str, choices=["loss", "skip_ack", "skip_seq", "duplicate"],
+                        help="Choose your test mode in tc netem")
     # Parses the arguments from the user, it calls the check functions to validate the inputs given
     args = parser.parse_args()
     if args.client and args.server:
@@ -1131,12 +1188,22 @@ def main():
         if args.creliability is None:
             print_error("Client reliability mode is not set!")
             sys.exit(1)
-        run_client(args.ip, args.port, args.file, args.creliability, args.mode, args.window)
+
+        skip_a_packet = False
+        if args.mode == "loss":
+            skip_a_packet = True
+
+        run_client(args.ip, args.port, args.file, args.creliability, args.tcmode, args.window, skip_a_packet)
     elif args.server:
         if args.sreliability is None:
             print_error("Server reliability mode is not set!")
             sys.exit(1)
-        run_server(args.ip, args.port, args.server_save_path, args.sreliability, args.mode, args.window)
+
+        skip_a_packet = False
+        if args.mode == "skip_ack":
+            skip_a_packet = True
+
+        run_server(args.ip, args.port, args.file, args.sreliability, args.tcmode, args.window, skip_a_packet)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
