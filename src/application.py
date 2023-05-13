@@ -391,7 +391,7 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         last_acknowledgement = acknowledgment_number
         # Expected ack
         expected_ack = sequence_number + len(packets[0])
-        seq_archive = [""] * len(packets)
+        seq_archive = [0] * len(packets)
         # Total acks received
         ack_count = 0
         # Total packets sent, used to break out of the loop if we have sent all packets in the interval
@@ -399,13 +399,14 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         timeout_count = 0
         print(f"Antall pakker å sende: {len(packets)}")
         first_seq = sequence_number
+        base = 0
         while len(packets) > ack_count:
             print(f"Antall pakker å sende: {len(packets)}")
 
             # Send the send x packets
-            for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
+            for i in range(base, min(sliding_window + base, len(packets))):
                 print(f"Sender pakke {i}")
-                if i == ack_count:
+                if i == base:
                     # Set a new sequence number for the last acked packet
                     sequence_number = last_sequence
                     # Set a new acknowledgment number for the last acked packet
@@ -436,9 +437,15 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     # Update the last sequence number and last ack number
                     last_sequence = expected_ack
                     last_acknowledgement = sequence_number
-                    ack_count += 1
+                    temp_seq = expected_ack
+                    for i in range(ack_count, last_packet_sent):
+                        if acknowledgment_number == temp_seq:
+                            break
+                        temp_seq += len(packets[i])
+                        ack_count = i + 1
+                    base += 1
                     # Update the expected ack
-                    expected_ack = expected_ack + len(packets[ack_count])
+                    expected_ack = expected_ack + len(packets[base])
                     # Update the ack count
 
                 print(f"ack_count: {ack_count}")
@@ -451,9 +458,10 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
-
+                # Resend the packets
                 # Count the acks we have received
                 # Send the send x packets
+
                 temp_seq = first_seq
                 ack_count = 0
                 for i in range(ack_count, len(packets)):
@@ -949,7 +957,7 @@ def run_server(server_ip, server_port, file, reliability, mode, sliding_window, 
         elapsed_time = time.time() - start_time
         filesize = 0
 
-        #basename = str(packets[0].decode())
+        # basename = str(packets[0].decode())
 
         """
         for packet in packets:
@@ -975,19 +983,17 @@ def run_server(server_ip, server_port, file, reliability, mode, sliding_window, 
 
         close_server_connection(sock, address, sequence_number, receiver_window)
 
-        # basename = str(packets[0].decode())
+        #basename = str(packets[0].decode())
 
         file = b""
 
-        for packet in packets:
-            file += packet
-
-        """ for packet in range(0, len(packets)):
-            file += packets[packet]"""
+        for packet in range(0, len(packets)):
+            file += packets[packet]
 
         save_path = os.path.join(os.getcwd(), "received_files")
 
-        basename = "fil.jpg"
+        basename = "shrek.jpg"
+        # basename = "nyfil-test.txt"
         # basename = f"Fil{time.time()}"
 
         save_file = open(os.path.join(save_path, basename), 'wb')
