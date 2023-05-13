@@ -62,7 +62,7 @@ def create_tc_netem_testcases(test_case=None):
     # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
     if test_case == "skip_seq":
         print("Adding reordering to the outgoing packets to simulate out of order packets at 5%")
-        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "50ms", "reorder", "5%"])
+        subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "10ms", "reorder", "5%"])
     # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
     if test_case == "duplicate":
         print("Adding 5% packet duplication to the outgoing packets")
