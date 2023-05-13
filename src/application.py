@@ -60,7 +60,7 @@ def create_tc_netem_testcases(test_case=None):
         print("Adding 5% packet loss to the outgoing packets")
         subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "loss", "5%"])
     # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
-    if test_case == "skip_seq":
+    if test_case == "skip_seq" or test_case == "reorder":
         print("Adding reordering to the outgoing packets to simulate out of order packets at 5%")
         subprocess.run(["tc", "qdisc", "add", "dev", interface, "root", "netem", "delay", "10ms", "reorder", "5%"])
     # Emulate 5% packet reordering for the outgoing packets for to simulate out of order packets
@@ -223,6 +223,20 @@ def random_isn():
     return random.randint(0, 2 ** 32 - 1)
 
 
+# Description
+#   This function implements the Stop and Wait protocol
+# Parameters
+#   sock: The socket to use
+#   address: The address to send to or receive from
+#   sequence_number: The sequence number to start with from the handshake
+#   acknowledgment_number: The acknowledgment number to start with from the handshake
+#   flags: The flags to use from the handshake
+#   receiver_window: The receiver window to use from the handshake
+#   packets: The packets to send (if we are the client) or None (if we are the server)
+#   sliding_window: The sliding window size to use
+#   skip_a_packet: Whether to skip a packet or not
+# Returns
+#   sock: The socket to use or the packets received (if we are the server)
 def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
                   skip_a_packet=False):
     print("Stop and wait")
@@ -371,6 +385,20 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
         return packets
 
 
+# Description
+#   This function implements the Go-Back-N protocol
+# Parameters
+#   sock: The socket to use
+#   address: The address to send to or receive from
+#   sequence_number: The sequence number to start with from the handshake
+#   acknowledgment_number: The acknowledgment number to start with from the handshake
+#   flags: The flags to use from the handshake
+#   receiver_window: The receiver window to use from the handshake
+#   packets: The packets to send (if we are the client) or None (if we are the server)
+#   sliding_window: The sliding window size to use
+#   skip_a_packet: Whether to skip a packet or not
+# Returns
+#   sock: The socket to use or the packets received (if we are the server)
 def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
         sliding_window=5, skip_a_packet=False):
     print("Using GBN")
@@ -515,6 +543,20 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         return packets
 
 
+# Description
+#   This function implements the Selective Repeat protocol
+# Parameters
+#   sock: The socket to use
+#   address: The address to send to or receive from
+#   sequence_number: The sequence number to start with from the handshake
+#   acknowledgment_number: The acknowledgment number to start with from the handshake
+#   flags: The flags to use from the handshake
+#   receiver_window: The receiver window to use from the handshake
+#   packets: The packets to send (if we are the client) or None (if we are the server)
+#   sliding_window: The sliding window size to use
+#   skip_a_packet: Whether to skip a packet or not
+# Returns
+#   sock: The socket to use or the packets received (if we are the server)
 def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_window, packets=None,
        sliding_window=5, skip_a_packet=False):
     print("Using SR")
@@ -704,6 +746,18 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         return packets
 
 
+# Description
+# Run the client
+# Parameters
+# server_ip: The IP of the server
+# server_port: The port of the server
+# filename: The filename to read and send
+# reliability: The reliability of the connection
+# tc_netem: The netem testcases to run
+# sliding_window: The sliding window size
+# skip_a_packet: Whether or not to skip a packet
+# Returns
+# None
 def run_client(server_ip, server_port, filename, reliability, tc_netem, sliding_window, skip_a_packet):
     # Create the testcases if they are specified
     if tc_netem is not None:
@@ -856,6 +910,18 @@ def run_client(server_ip, server_port, filename, reliability, tc_netem, sliding_
         exit(1)
 
 
+# Description:
+# This function runs the server
+# Parameters:
+# server_ip: The IP to bind the server to
+# server_port: The port to bind the server to
+# path: The path to save the file to
+# reliability: The reliability of the connection (stop_and_wait, gbn, sr)
+# tc_netem: The netem testcases to be run (duplicate, loss, reorder, skip_ack, skip_seq)
+# sliding_window: The sliding window size
+# skip_a_packet: The packet to be skipped
+# Returns:
+# None
 def run_server(server_ip, server_port, path, reliability, tc_netem, sliding_window, skip_a_packet=None):
     # Create the testcases if they are specified
     if tc_netem is not None:
@@ -974,8 +1040,12 @@ def run_server(server_ip, server_port, path, reliability, tc_netem, sliding_wind
         exit(1)
 
 
-# Startet med arparse. Det er fortsatt ikke helt opplagt hva flaggene er, men jeg antar at -m og -r er de samme greiene.
-# -m flagget: server og -r flagget: client
+# Description:
+# Main function of the program, parses the arguments and calls the run_server or run_client function
+# Parameters:
+#   None
+# Returns:
+#   None
 def main():
     # Description:
     # Checks is the input is a positive integer, raises an error if it's not.
@@ -1148,7 +1218,7 @@ def main():
                         help="Window size, default default %(default)s")
     parser.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack"],
                         help="Choose your test mode")
-    parser.add_argument('-tn', '--tnetem', type=str, choices=["loss", "skip_ack", "skip_seq", "duplicate"],
+    parser.add_argument('-tn', '--tnetem', type=str, choices=["duplicate", "loss", "reorder", "skip_ack", "skip_seq"],
                         help="Choose your test mode in tc netem")
     # Parses the arguments from the user, it calls the check functions to validate the inputs given
     args = parser.parse_args()
@@ -1186,7 +1256,7 @@ def main():
         parser.print_help()
         exit(1)
 
-    if args.mode is not None:  # If the user has set a test mode i.e. loss or skip_ack remove the artificial test case
+    if args.tnetem is not None:  # If the user has set a test mode i.e. loss or skip_ack remove the artificial test case
         # Remove the artificial test case set by netem
         remove_tc_netem_testcases()
 
