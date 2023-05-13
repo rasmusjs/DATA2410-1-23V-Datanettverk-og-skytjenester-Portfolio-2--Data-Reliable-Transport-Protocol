@@ -618,11 +618,11 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet is True:
                         test_case_done = True
                         print(f"Skipped packet {test_case_packet_skip}")
-                        continue
-                    test_case_packet_counter += 1
+                    else:
+                        # Send the packet
+                        sock.sendto(packet, address)
 
-                    # Send the packet
-                    sock.sendto(packet, address)
+                    test_case_packet_counter += 1
                     print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
                     packets_sent_in_interval += 1
 
@@ -687,7 +687,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
         # Start receiving packets
         while True:
-            # Receive ack from client
+            # Receive ack from the client
             raw_data, address = sock.recvfrom(receiver_window)
             # Decode the header
             sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
