@@ -9,6 +9,7 @@ import subprocess  # For running commands in the terminal
 
 # Default values
 formatting_line = "-" * 45  # Formatting line = -----------------------------
+max_filename_length = 32  # Maximum length of the file
 default_server_save_path = "received_files"  # Path to the folder where received files are stored
 default_ip = "127.0.0.1"
 default_port = 8088
@@ -375,6 +376,12 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
     # If we are the server, packet_to_send is None
     # If we are the client, we have packets to send (not None)
 
+    # Test case to skip a packet
+    test_case_packet_counter = 0
+    test_case_packet_skip = 10
+    test_case_done = False
+
+
     # We are the client
     if packets is not None:
         # main_testing("skip_ack")
@@ -399,14 +406,13 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
         timeout_count = 0
         print(f"Antall pakker å sende: {len(packets)}")
         first_seq = sequence_number
-        base = 0
         while len(packets) > ack_count:
             print(f"Antall pakker å sende: {len(packets)}")
 
             # Send the send x packets
-            for i in range(base, min(sliding_window + base, len(packets))):
+            for i in range(ack_count, min(sliding_window + ack_count, len(packets))):
                 print(f"Sender pakke {i}")
-                if i == base:
+                if i == ack_count:
                     # Set a new sequence number for the last acked packet
                     sequence_number = last_sequence
                     # Set a new acknowledgment number for the last acked packet
@@ -416,6 +422,14 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 seq_archive[i] = sequence_number
                 # Create the header
                 packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
+
+                # If we are testing, skip the last packet
+                if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet:
+                    test_case_done = True
+                    print(f"Skipped packet {test_case_packet_skip}")
+                    continue
+                test_case_packet_counter += 1
+
                 # Send the packet
                 sock.sendto(packet, address)
                 print(f"Sent: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
@@ -437,15 +451,9 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                     # Update the last sequence number and last ack number
                     last_sequence = expected_ack
                     last_acknowledgement = sequence_number
-                    temp_seq = expected_ack
-                    for i in range(ack_count, last_packet_sent):
-                        if acknowledgment_number == temp_seq:
-                            break
-                        temp_seq += len(packets[i])
-                        ack_count = i + 1
-                    base += 1
+                    ack_count += 1
                     # Update the expected ack
-                    expected_ack = expected_ack + len(packets[base])
+                    expected_ack = expected_ack + len(packets[ack_count])
                     # Update the ack count
 
                 print(f"ack_count: {ack_count}")
@@ -458,10 +466,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 sock.bind(old_address)
                 # Set the socket timeout to 500 ms
                 sock.settimeout(sock_timeout)
-                # Resend the packets
                 # Count the acks we have received
                 # Send the send x packets
-
                 temp_seq = first_seq
                 ack_count = 0
                 for i in range(ack_count, len(packets)):
@@ -510,6 +516,15 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
                 # Add the data to the packets array
                 packets.append(data)
                 flags = set_flags(0, 1, 0, 0)
+
+                # If we are testing, skip the last packet
+                if test_case_packet_counter == test_case_packet_skip and not test_case_done and skip_a_packet:
+                    test_case_done = True
+                    print(f"Skipped packet {test_case_packet_skip}")
+                    continue
+                test_case_packet_counter += 1
+
+
                 sock.sendto(encode_header(sequence_number, next_sequence_number, flags, receiver_window), address)
             else:
                 print("Duplicate")
@@ -787,18 +802,28 @@ def run_client(server_ip, server_port, filename, reliability, mode, sliding_wind
         # The length of the header
         header_length = 12
         # Sending name of file
-        #packets.append(filename.encode())
+        # packets.append(filename.encode())
+
+        # Encode the filename to bytes
+        encoded_filename = filename.encode()
+        # Pad the filename with null bytes to make it 32 bytes long
+        encoded_filename = encoded_filename.ljust(max_filename_length, b'\0')
+
+        first_packet = True
 
         # Open the file and send it in chunks of 1024 bytes
         with open(filename, 'rb') as f:
             print(f"Reading from {filename}")
             # Loop until the end of the file
             while True:
-                file_raw_data = f.read(receiver_window - header_length)
-                # print(file_raw_data.decode())
-                # file_raw_data = file_raw_data.decode()
+                if first_packet:
+                    # Add the filename to the first packet and read the first chunk of the file
+                    file_raw_data = encoded_filename + f.read(receiver_window - header_length - max_filename_length)
+                    first_packet = False
+                else:
+                    # Read the next chunk of the file
+                    file_raw_data = f.read(receiver_window - header_length)
                 packets.append(file_raw_data)
-                # print(file_raw_data)  # Print the raw_data we have read from the file
                 if not file_raw_data:
                     break
 
@@ -876,13 +901,12 @@ def run_client(server_ip, server_port, filename, reliability, mode, sliding_wind
         exit(1)
 
 
-def run_server(server_ip, server_port, file, reliability, mode, sliding_window, skip_a_packet=None):
+def run_server(server_ip, server_port, path, reliability, mode, sliding_window, skip_a_packet=None):
     # server_ip, port, client_ip, client_port = "127.0.0.1", 1234, "127.0.0.1", 4321  # For testing
     # server_ip, server_port, client_ip, client_port = "10.0.1.2", 1234, "10.0.0.1", 4321  # For testing
 
     if mode is not None:
         run_artificial_testcase(mode)
-
     try:
         # Set up socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -932,10 +956,6 @@ def run_server(server_ip, server_port, file, reliability, mode, sliding_window, 
                 print("Connection established")
                 break
 
-        # reliability = "stop_and_wait"  # For testing
-        # reliability = "go_back_n"  # For testing
-        # reliability = "selective_repeat"  # For testing
-
         packets = []
 
         start_time = time.time()
@@ -955,18 +975,16 @@ def run_server(server_ip, server_port, file, reliability, mode, sliding_window, 
                          skip_a_packet)
 
         elapsed_time = time.time() - start_time
-        filesize = 0
 
-        # basename = str(packets[0].decode())
+        # Close the connection
+        close_server_connection(sock, address, sequence_number, receiver_window)
 
-        """
+        file = b""
         for packet in packets:
-            filesize += len(packet)"""
+            file += packet
 
-        for packet in range(1, len(packets)):
-            filesize += len(packets[packet])
-
-        throughput = (filesize / elapsed_time) * 8
+        # Calculate the throughput
+        throughput = (len(file) / elapsed_time) * 8
         throughput_formatted = "{:.2f}".format(throughput)
 
         if throughput > 1000000:
@@ -978,30 +996,18 @@ def run_server(server_ip, server_port, file, reliability, mode, sliding_window, 
         else:
             print(f"Throughput: {float(throughput_formatted):.2f} bps")
 
-        # SR(sock, address, filename)
-        # Kjør kode eller noe her
+        # Decode the filename to bytes and remove the padding
+        filename = file[:max_filename_length]
+        # Remove the padding from the filename
+        filename = filename.decode().strip("\0'")
+        # Remove the filename from the file
+        file = file[max_filename_length:]
 
-        close_server_connection(sock, address, sequence_number, receiver_window)
-
-        #basename = str(packets[0].decode())
-
-        file = b""
-
-        for packet in range(0, len(packets)):
-            file += packets[packet]
-
-        save_path = os.path.join(os.getcwd(), "received_files")
-
-        basename = "shrek.jpg"
-        # basename = "nyfil-test.txt"
-        # basename = f"Fil{time.time()}"
-
-        save_file = open(os.path.join(save_path, basename), 'wb')
+        save_path = os.path.join(os.getcwd(), path)
+        save_file = open(os.path.join(save_path, filename), 'wb')
         save_file.write(file)
-        # save_file.write(file.encode())
         save_file.close()
-
-        subprocess.run(f"chmod 666 {save_path}/{basename}", shell=True)
+        subprocess.run(f"chmod 666 {save_path}/{filename}", shell=True)
 
     except KeyboardInterrupt:
         print("Server shutting down")
@@ -1141,18 +1147,21 @@ def main():
     #   file: holds the file name
     # Returns:
     #   Returns the file name if it exists, else it will exit the program with an error message
-    def check_file(file):
+    def check_file(filename):
         # Default error message message
         error_message = None
         try:
-            if not os.path.isfile(file):  # Check if the file exists
-                error_message = f"{file} does not exist"  # Set error_message message
+            if max_filename_length < len(filename):  # Check if the file name is too long
+                error_message = f"{filename} is too long, the file name must be less than {max_filename_length} characters"
+                raise ValueError  # Raise error_message
+            if not os.path.isfile(filename):  # Check if the file exists
+                error_message = f"{filename} does not exist"  # Set error_message message
                 raise ValueError
         except ValueError:
             print_error(error_message)  # Print using standard error_message message function
             parser.print_help()
             exit(1)  # Exit the program
-        return file  # Return the file name if it exists
+        return filename  # Return the file name if it exists
 
     # Add description and epilog to the parser, this is for prettier help text
     parser = argparse.ArgumentParser(description="DRTP file transfer application script",
@@ -1209,7 +1218,8 @@ def main():
         if args.mode == "skip_ack":
             skip_a_packet = True
 
-        run_server(args.ip, args.port, args.file, args.sreliability, args.tcmode, args.window, skip_a_packet)
+        run_server(args.ip, args.port, args.server_save_path, args.sreliability, args.tcmode, args.window,
+                   skip_a_packet)
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
