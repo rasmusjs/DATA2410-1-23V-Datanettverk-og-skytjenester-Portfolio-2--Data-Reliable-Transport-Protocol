@@ -595,6 +595,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         starting_point = 0
         # The total packets received
         total_packets_received = 0
+        recived_packets = []
+
+        end_point = sliding_window + 1
+
         #  ack_count + 1 != len(packets) - 1
         while total_packets_received < len(packets):
             print("Acked this interval: ", ack_count)
@@ -607,10 +611,10 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
             print("Starting point: ", starting_point)
 
             # Send the send x packets
-            for i in range(starting_point, min(sliding_window + starting_point, len(packets))):
+            for i in range(starting_point, min(end_point, len(packets))):
                 # print("\n")
                 if packets_sent_and_received[i] is False:
-                    print(f"Sending number: {i + 1} av {min(sliding_window + starting_point, len(packets))}")
+                    print(f"Sending number: {i + 1} av  {min(end_point, len(packets))}")
                     # Create the header
                     packet = create_packet(sequence_number, acknowledgment_number, 0, receiver_window, packets[i])
 
@@ -631,51 +635,54 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                 if packets_sent_and_received[i] is False:
                     print("Expected ack: ", expected_acks[i])
 
-            print("Packets sent in interval: ", packets_sent_in_interval)
+                # IKKE HELT SIKKER PÅ DENNE!!!
+
+                if packets_sent_in_interval == sliding_window:
+                    break
+
+                print("Packets sent in interval: ", packets_sent_in_interval)
             while True:
                 try:
                     # Receive the ack
                     raw_data, address = sock.recvfrom(receiver_window)
                     # Decode the header
-                    sequence_number, acknowledgment_number, flags, receiver_window, data = strip_packet(raw_data)
+                    rev_sequence_number, rev_acknowledgment_number, rev_flags, rev_receiver_window, rev_data = strip_packet(
+                        raw_data)
                     # Parse the flags
                     syn, ack, fin, rst = parse_flags(flags)
-                    print(f"Received: SEQ {sequence_number}, ACK {acknowledgment_number}, {flags}, {receiver_window}")
+                    print(
+                        f"Received: SEQ {rev_sequence_number}, ACK {rev_acknowledgment_number}, {rev_flags}, {rev_receiver_window}")
+                    recived_packets.append(rev_data)
 
-                    for i in range(starting_point, len(packets)):
-                        print(
-                            f"Checking packet number: {i + 1} of {min(sliding_window + starting_point, len(packets))}")
-                        if expected_acks[i] == 0:
+                    for j in range(starting_point, len(packets)):
+                        if expected_acks[j] == 0:
                             print("Expected ack is empty, breaking")
                             break
                         # print("Printing i: ", i)
                         # print(f"Sjekker for match {expected_acks[i]}")
-                        if ack and acknowledgment_number == expected_acks[i] and packets_sent_and_received[i] is False:
-                            print(f"Fant match {expected_acks[i]}")
-                            packets_sent_and_received[i] = True
+                        if ack and rev_acknowledgment_number == expected_acks[j] and packets_sent_and_received[
+                            j] is False:
+                            print(f"Fant match {expected_acks[j]}")
+                            packets_sent_and_received[j] = True
                             # Update the last sequence number and last ack number
                             # Update the ack countk
                             total_packets_received += 1
                             ack_count += 1
                             break
 
-                        # If all the packets we have sent have been acked, we are done
-                    print("Packets acked: ", ack_count)
-                    if packets_sent_in_interval == ack_count:
-                        minimum_sequence_number = sequence_number
-                        sequence_starting_point = acknowledgment_number
-                        acknowledgement_starting_point = sequence_number
-                        starting_point += ack_count
+                    if expected_acks[starting_point] and packets_sent_and_received[starting_point] is True:
+                        minimum_sequence_number = rev_sequence_number
+                        sequence_starting_point = rev_acknowledgment_number
+                        acknowledgement_starting_point = minimum_sequence_number
+                        starting_point += 1
+                        end_point += 1
                         print("New starting point: ", starting_point)
-                        # Send packets from the last acked packet
-                        print("All packets received")
                         break
 
                 except TimeoutError as e:
                     print(f"Timeout: {e}")
                     # Set the socket timeout to 500 ms
                     sock.settimeout(sock_timeout)
-                    break
 
         return sock
     else:
@@ -717,8 +724,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                     new_packet = False
                     print("Duplicate packet")
                     break
-
-            # Acknowledge the packet if it's new
+                    # Acknowledge the packet if it's new
             if new_packet:
                 print("We have a new packet, adding to buffer")
                 packets_acked.append(sequence_number)  # Add the packet to the list of packets that have been acked
@@ -770,6 +776,8 @@ def run_client(server_ip, server_port, filename, reliability, tc_netem, sliding_
         # a random number
         sequence_number, acknowledgment_number, flags, receiver_window = random_isn(), 0, 0, 1024
         # Start the three-way handshake, based on https://www.ietf.org/rfc/rfc793.txt page 31
+        # Random isn https://www.rfc-editor.org/rfc/rfc6528 page 2
+        # and https://www.rfc-editor.org/rfc/rfc1948 page 4
         address = (server_ip, server_port)
 
         # Create a header with the syn flag set
