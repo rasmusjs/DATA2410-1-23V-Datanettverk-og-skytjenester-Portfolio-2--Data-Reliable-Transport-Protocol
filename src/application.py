@@ -122,7 +122,7 @@ def set_flags(syn, ack, fin, rst):
 # Description:
 #  Function for printing the flags in a more readable way
 # Parameters:
-#   flags: holds the flags
+#   flags: holds the flags set
 # Returns:
 #   Returns nothing, it prints the flags e.g "Flags: syn ack"
 def pretty_flags(flags):
@@ -134,7 +134,7 @@ def pretty_flags(flags):
         print("No flags")
 
 
-# Define the structure of the headed
+# Define the structure of the header
 # I = 32 bits, H = 16 bits
 # Sequence Number:32 bits, Acknowledgment Number:32, Flags:16 ,Window:16
 # From https://docs.python.org/3/library/struct.html
@@ -218,13 +218,14 @@ def close_server_connection(sock, address, sequence_number, receiver_window):
 # Parameters:
 #   None
 # Returns:
-#   Returns a random initial sequence number as an integer
+#   Returns a random initial sequence number as an integer (32 bits)
 def random_isn():
     return random.randint(0, 2 ** 32 - 1)
 
 
 # Description
-#   This function implements the Stop and Wait protocol
+#   This function implements the Stop and Wait protocol, either as a client or a server (depending on the parameters).
+#   It takes the parameters from the handshake and uses them for sending the packets
 # Parameters
 #   sock: The socket to use
 #   address: The address to send to or receive from
@@ -386,7 +387,8 @@ def stop_and_wait(sock, address, sequence_number, acknowledgment_number, flags, 
 
 
 # Description
-#   This function implements the Go-Back-N protocol
+#   This function implements the Go-Back-N protocol, either as a client or a server (depending on the parameters).
+#   It takes the parameters from the handshake and uses them for sending the packets
 # Parameters
 #   sock: The socket to use
 #   address: The address to send to or receive from
@@ -544,7 +546,8 @@ def GBN(sock, address, sequence_number, acknowledgment_number, flags, receiver_w
 
 
 # Description
-#   This function implements the Selective Repeat protocol
+#   This function implements the Selective Repeat protocol, either as a client or a server (depending on the parameters).
+#   It takes the parameters from the handshake and uses them for sending the packets
 # Parameters
 #   sock: The socket to use
 #   address: The address to send to or receive from
@@ -1033,11 +1036,13 @@ def run_server(server_ip, server_port, path, reliability, tc_netem, sliding_wind
         # Remove the filename from the file
         file = file[max_filename_length:]
 
+        # Save the file and set the permissions to 777
         save_path = os.path.join(os.getcwd(), path)
         save_file = open(os.path.join(save_path, filename), 'wb')
         save_file.write(file)
         save_file.close()
-        subprocess.run(f"chmod 666 {save_path}/{filename}", shell=True)
+        # Change the permissions of the file to 777
+        subprocess.run(f"chmod 777 {save_path}/{filename}", shell=True)
 
     except KeyboardInterrupt:
         print("Server shutting down")
@@ -1167,9 +1172,11 @@ def main():
         error_message = None
         try:
             if not os.path.isdir(path):  # Check if the path is a directory
-                error_message = f"{path} is not a valid save path"  # Set error_message message
-                raise ValueError  # Raise error_message
-        except ValueError:
+                os.mkdir(path, mode=0o777)  # Create the directory
+                # subprocess.run(f"chown -R :users {path}", shell=True)  # Change the owner of the directory
+                print(f"Created directory {path}")
+        except OSError as e:  # Catch the error if the directory can not be created
+            error_message = f"{path} is not a valid save path, OS error {e}"  # Set error_message message
             print_error(error_message)  # Print using standard error_message message function
             parser.print_help()
             exit(1)  # Exit the program
@@ -1198,35 +1205,35 @@ def main():
         return filename  # Return the file name if it exists
 
     # Add description and epilog to the parser, this is for prettier help text
-    parser = argparse.ArgumentParser(description="DRTP file transfer application script",
+    parser = argparse.ArgumentParser(description="DRTP file transfer application",
                                      epilog="end of help")
 
     # Client only arguments
     client_group = parser.add_argument_group('Client')  # Create a group for the client arguments, for the help text
     client_group.add_argument('-c', '--client', action="store_true", help="Run in client mode")
-    client_group.add_argument('-r', '--creliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
-                              help="Choose reliability mode for client")
-    client_group.add_argument('-f', '--file', type=check_file, help="Name of the file")
+    client_group.add_argument('-f', '--file', type=check_file, help="Name of the file to send")
 
     # Server only arguments
     server_group = parser.add_argument_group('Server')  # Create a group for the server arguments, for the help text
     server_group.add_argument('-s', '--server', action="store_true", help="Run in server mode")
-    server_group.add_argument('-sp', '--server_save_path', type=check_save_path, default=default_server_save_path,
-                              help="Path to save items. Default %(""default)s")
-    server_group.add_argument('-m', '--sreliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
-                              help="Choose reliability mode for server")
+    server_group.add_argument('-sp', '--save_path', type=check_save_path, default=default_server_save_path,
+                              help="Save path for the files. If the folder does not exist it will be created Default "
+                                   "folder %(""default)s/")
 
     # Common arguments
     parser.add_argument('-i', '--ip', type=check_ipaddress, default=default_ip,
                         help="IP address to connect/bind to, in dotted decimal notation. Default %(default)s")
     parser.add_argument('-p', '--port', type=check_port, default=default_port,
-                        help="Port to use, default default %(default)s")
+                        help="Port to use, default %(default)s")
+    parser.add_argument('-r', '--reliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
+                        help="Choose reliability mode, this must match must match the server/client reliability mode")
     parser.add_argument('-w', '--window', type=check_positive_integer, default=5,
-                        help="Window size, default default %(default)s")
+                        help="Set the window size, default %(default)s packets per window")
     parser.add_argument('-t', '--mode', type=str, choices=["loss", "skip_ack"],
-                        help="Choose your test mode")
+                        help="Choose your a testcase, loss or skip_ack. Skip_ack will run on the server side only and loss will run on client")
     parser.add_argument('-tn', '--tnetem', type=str, choices=["duplicate", "loss", "reorder", "skip_ack", "skip_seq"],
-                        help="Choose your test mode in tc netem")
+                        help="Run tnetem artificial network emulation on the host, it requires root privileges ")
+
     # Parses the arguments from the user, it calls the check functions to validate the inputs given
     args = parser.parse_args()
     if args.client and args.server:
@@ -1234,7 +1241,7 @@ def main():
         parser.print_help()
         exit(1)
     if args.client:
-        if args.creliability is None:
+        if args.reliability is None:
             print_error("Client reliability mode is not set!")
             parser.print_help()
             exit(1)
@@ -1249,9 +1256,10 @@ def main():
             skip_a_packet = True
 
         # Run the client
-        run_client(args.ip, args.port, args.file, args.creliability, args.tnetem, args.window, skip_a_packet)
+        run_client(args.ip, args.port, args.file, args.reliability, args.tnetem, args.window, skip_a_packet)
+
     elif args.server:
-        if args.sreliability is None:
+        if args.reliability is None:
             print_error("Server reliability mode is not set!")
             parser.print_help()
             exit(1)
@@ -1260,9 +1268,13 @@ def main():
         if args.mode == "skip_ack":
             skip_a_packet = True
 
+        # Check if the save path exists and create it if it does not
+        check_save_path(args.save_path)
+
         # Run the server
-        run_server(args.ip, args.port, args.server_save_path, args.sreliability, args.tnetem, args.window,
+        run_server(args.ip, args.port, args.save_path, args.reliability, args.tnetem, args.window,
                    skip_a_packet)
+
     else:
         print("Error, you must select server or client mode!")
         parser.print_help()
