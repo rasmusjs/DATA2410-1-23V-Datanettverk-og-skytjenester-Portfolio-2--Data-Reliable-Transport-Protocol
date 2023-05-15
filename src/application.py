@@ -1066,6 +1066,7 @@ def main():
     # integer: holds the integer to check
     # Returns:
     #   Returns the integer if valid, else it will exit the program with an error message
+    # Taken from portfolio 1
     def check_positive_integer(integer):
         # Default error message message
         error_message = None
@@ -1088,6 +1089,7 @@ def main():
     #   port: holds the port number for server or client
     # Returns:
     #   Returns the port (integer) if valid, else it will exit the program with an error message
+    # Taken from portfolio 1
     def check_port(port):
         # Default error message message
         error_message = None
@@ -1116,6 +1118,7 @@ def main():
     #   ip: holds the ip address of the server
     # Returns
     #   the ip same ipaddress without leading zeroes, else it will exit the program with an error message
+    # Taken from portfolio 1
     def check_ipaddress(ip):
         # Default error message message
         error_message = None

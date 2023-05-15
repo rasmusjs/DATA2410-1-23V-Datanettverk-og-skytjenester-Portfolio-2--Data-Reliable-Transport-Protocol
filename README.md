@@ -43,10 +43,10 @@ Usage `python3 application.py -s -sp save_folder`
 Usage `python3 application.py -s -h`
 
 -i, --ip IP address to connect/bind to, in dotted decimal notation. Default 127.0.0.1
-Usage `python3 application.py -s -i 192.168.0.1`
+Usage `python3 application.py -s -i 127.0.0.1`
 
 -p, --port Port to use, default 8088
-Usage `python3 application.py -s -p 9000`
+Usage `python3 application.py -s -p 8080`
 
 -r {stop_and_wait,gbn,sr}, --reliability {stop_and_wait,gbn,sr}
 Choose reliability mode, this must match the server/client reliability mode
@@ -84,12 +84,12 @@ Usage `python3 application.py -c -f filename.txt`
 Usage `python3 application.py -h`
 
 -i, --ip IP address to connect/bind to, in dotted decimal notation. Default 127.0.0.1
-Usage `python3 application.py -i 192.168.0.1`
+* Usage `python3 application.py -i 127.0.0.1`
 
 -p, --port Port to use, default 8088
-Usage `python3 application.py -p 9000`
+* Usage `python3 application.py -p 8080`
 
--r {stop_and_wait,gbn,sr}, --reliability {stop_and_wait,gbn,sr}
+-r, --reliability {stop_and_wait,gbn,sr}
 Choose reliability mode, this must match the server/client reliability mode
 Usage `python3 application.py -r gbn`
 
@@ -97,12 +97,12 @@ Usage `python3 application.py -r gbn`
 Set the window size, default 5 packets per window this needs to be the same as the server
 Usage `python3 application.py -w 10`
 
--t {loss,skip_ack}, --mode {loss,skip_ack}
+-t, --mode {loss,skip_ack}
 Choose your a testcase, loss or skip_ack. Skip_ack will run on the server side only, and loss will run on the client
 
 Usage `python3 application.py -t loss`
 
--tn {duplicate,loss,reorder,skip_ack,skip_seq}, --tnetem {duplicate,loss,reorder,skip_ack,skip_seq}
+-tn, --tnetem {duplicate,loss,reorder,skip_ack,skip_seq}
 Run tnetem artificial network emulation on the host; it requires root privileges
 Usage `python3 application.py -tn reorder`
 
@@ -112,12 +112,12 @@ Usage `python3 application.py -tn reorder`
 Usage `python3 application.py -c -h`
 
 -i, --ip IP address to connect/bind to, in dotted decimal notation. Default 127.0.0.1
-Usage `python3 application.py -c -i 192.168.0.1`
+Usage `python3 application.py -c -i 127.0.0.1`
 
 -p, --port Port to use, default 8088
-Usage `python3 application.py -c -p 9000`
+Usage `python3 application.py -c -p 8080`
 
--r {stop_and_wait,gbn,sr}, --reliability {stop_and_wait,gbn,sr}
+-r, --reliability {stop_and_wait,gbn,sr}
 Choose reliability mode, this must match the server/client reliability mode
 Usage `python3 application.py -c -r gbn`
 
@@ -125,12 +125,12 @@ Usage `python3 application.py -c -r gbn`
 Set the window size, default 5 packets per window
 Usage `python3 application.py -c -w 10`
 
--t {loss,skip_ack}, --mode {loss,skip_ack}
+-t, --mode {loss,skip_ack}
 Choose your a testcase, loss or skip_ack. Skip_ack will run on the server side only and loss will run on the client
 
 Usage `python3 application.py -c -t loss`
 
--tn {duplicate,loss,reorder,skip_ack,skip_seq}, --tnetem {duplicate,loss,reorder,skip_ack,skip_seq}
+-tn, --tnetem {duplicate,loss,reorder,skip_ack,skip_seq}
 Run tnetem artificial network emulation on the host, it requires root privileges
 Usage `python3 application.py -c -tn reorder`
 
