@@ -1213,7 +1213,6 @@ def main():
     server_group.add_argument('-s', '--server', action="store_true", help="Run in server mode")
     server_group.add_argument('-sp', '--server_save_path', type=check_save_path, default=default_server_save_path,
                               help="Path to save items. Default %(""default)s")
-
     server_group.add_argument('-m', '--sreliability', type=str, choices=["stop_and_wait", "gbn", "sr"],
                               help="Choose reliability mode for server")
 
@@ -1237,6 +1236,11 @@ def main():
     if args.client:
         if args.creliability is None:
             print_error("Client reliability mode is not set!")
+            parser.print_help()
+            exit(1)
+
+        if args.file is None:
+            print_error("File name is not set!")
             parser.print_help()
             exit(1)
 
