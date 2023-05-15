@@ -1,9 +1,9 @@
 import argparse  # For parsing command line arguments
-import random  # For generating random numbers (e.g. random sequence number)
+import random  # For generating random numbers (e.g., random sequence number)
 import socket  # For creating sockets
 import time  # For getting the estimated RTT
 import sys  # For printing to standard error output
-import os  # For interacting with the operating system (e.g. creating folders and files)
+import os  # For interacting with the operating system (e.g., creating folders and files)
 import struct  # For packing and unpacking the header
 import subprocess  # For running commands in the terminal
 
@@ -22,7 +22,8 @@ default_port = 8088
 # Returns:
 #   Returns the interface name as a string
 def get_iface():
-    cmd = "route | awk 'NR==3{print $NF}'"  # Get the inferface name from the second line and last element of the output of the command "route"
+    # Get the interface name from the second line and last element of the output of the command "route"
+    cmd = "route | awk 'NR==3{print $NF}'"
     return subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
 
 
@@ -83,11 +84,11 @@ def print_error(error_message):
 
 
 # Description:
-#  Function for parsing the flags
+#   Function for parsing the flags
 # Parameters:
 #   flags: holds the flags
 # Returns:
-#   Returns the flags as a tuple
+#   Returns the flags as a tuple for easier human reading
 def parse_flags(flags):
     syn = flags & (1 << 3)  # 1 << 3 = 1000 # 8
     ack = flags & (1 << 2)  # 1 << 2 = 0100 # 4
@@ -97,15 +98,14 @@ def parse_flags(flags):
 
 
 # Description:
-#  Function for setting the flags
+#   Function for setting the flags, in a easier way than setting the bits manually
 # Parameters:
 #   syn: holds the syn flag
 #   ack: holds the ack flag
 #   fin: holds the fin flag
 #   rst: holds the rst flag
 # Returns:
-#   Returns the flags as an integer (byte), for example,
-#   if we have syn = 1, ack = 1, fin = 0, rst = 0 then the function returns 12
+#   Returns the flags as a integer
 def set_flags(syn, ack, fin, rst):
     flags = 0
     if syn:
@@ -120,7 +120,7 @@ def set_flags(syn, ack, fin, rst):
 
 
 # Description:
-#  Function for printing the flags in a more readable way
+#   Function for printing the flags in a more readable way
 # Parameters:
 #   flags: holds the flags set
 # Returns:
@@ -142,23 +142,23 @@ DRTP_struct = struct.Struct("!IIHH")
 
 
 # Description:
-#  Function for creating a header with the right format with fixed bit sizes
+#   Function for creating a header with the right format with fixed bit sizes
 # Parameters:
 #   sequence_number: holds the sequence number
 #   acknowledgment_number: holds the acknowledgment number
-#   flags: holds the flags
+#   flags: holds the flags set
 #   window: holds the window
 # Returns:
-#   Returns the header as a byte string
+#   Returns the header as a byte string, ready to be sent
 def encode_header(sequence_number, acknowledgment_number, flags, window):
     # Sequence Number:32 bits, Acknowledgment Number:32bits, Flags:16bits, Window:16bits
     return DRTP_struct.pack(sequence_number, acknowledgment_number, flags, window)
 
 
 # Description:
-#  Function for parsing a header
+#   Function for parsing a header
 # Parameters:
-#   header: holds the header
+#   header: holds the header as a byte string
 # Returns:
 #   Returns the header as a tuple
 def decode_header(header):
@@ -166,20 +166,20 @@ def decode_header(header):
 
 
 # Description:
-#  Function for stripping the header from the packet
+#   Function for stripping the header from the packet
 # Parameters:
-#   raw_data: holds the packet
+#   raw_data: holds the packet as a byte string
 # Returns:
 #   Returns the header as a tuple and the raw data as a byte string
 def strip_packet(raw_data):
     # Get header from the packet (first 12 bytes) and unpack the header fields
     sequence_number, acknowledgment_number, flags, receiver_window = decode_header(raw_data[:12])
-    # Return the header fields and the raw_data decoded as a tuple, the raw data is the payload
+    # Return the header fields, and the raw_data decoded as a tuple, the raw data is the payload
     return sequence_number, acknowledgment_number, flags, receiver_window, raw_data[12:]
 
 
 # Description:
-#  Function for creating a packet
+#   Function for creating a packet
 # Parameters:
 #   sequence_number: holds the sequence number
 #   acknowledgment_number: holds the acknowledgment number
@@ -193,7 +193,7 @@ def create_packet(sequence_number, acknowledgment_number, flags, window, data):
 
 
 # Description:
-#  Function for closing the server connection, it sends a FIN ACK to the client and closes the connection
+#   Function for closing the server connection, it sends a FIN ACK to the client and closes the connection
 # Parameters:
 #   sock: holds the socket
 #   address: holds the address
@@ -613,7 +613,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
             print("Starting point: ", starting_point)
 
-            # Send the send x packets
+            # Send the packets in the interval
             for i in range(starting_point, min(end_point, len(packets))):
                 # print("\n")
                 if packets_sent_and_received[i] is False:
@@ -635,11 +635,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 
                 sequence_number += len(packets[i])  # Set a new sequence number for the next packet
                 expected_acks[i] = sequence_number  # Set the expected ack for the next packet
-                if packets_sent_and_received[i] is False:
-                    print("Expected ack: ", expected_acks[i])
 
-                # IKKE HELT SIKKER PÅ DENNE!!!
-
+                # If we have sent all packets in the interval, break
                 if packets_sent_in_interval == sliding_window:
                     break
 
@@ -661,11 +658,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
                         if expected_acks[j] == 0:
                             print("Expected ack is empty, breaking")
                             break
-                        # print("Printing i: ", i)
-                        # print(f"Sjekker for match {expected_acks[i]}")
                         if ack and rev_acknowledgment_number == expected_acks[j] and packets_sent_and_received[
                             j] is False:
-                            print(f"Fant match {expected_acks[j]}")
                             packets_sent_and_received[j] = True
                             # Update the last sequence number and last ack number
                             # Update the ack countk
@@ -755,8 +749,8 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
         return packets
 
 
-# Description
-# Run the client
+# Description:
+#   Run the client
 # Parameters
 # server_ip: The IP of the server
 # server_port: The port of the server
@@ -766,7 +760,7 @@ def SR(sock, address, sequence_number, acknowledgment_number, flags, receiver_wi
 # sliding_window: The sliding window size
 # skip_a_packet: Whether or not to skip a packet
 # Returns
-# None
+#   None
 def run_client(server_ip, server_port, filename, reliability, tc_netem, sliding_window, skip_a_packet):
     # Create the testcases if they are specified
     if tc_netem is not None:
@@ -887,7 +881,7 @@ def run_client(server_ip, server_port, filename, reliability, tc_netem, sliding_
         else:
             print(f"Throughput: {float(throughput_formatted):.2f} bps")
 
-        # Start a two way handshake to close the connection
+        # Start a two-way handshake to close the connection
         # Set the flag to FIN, which is the 3rd element
         packet = encode_header(sequence_number, acknowledgment_number, set_flags(0, 0, 1, 0), receiver_window)
         sock.sendto(packet, address)
@@ -922,17 +916,17 @@ def run_client(server_ip, server_port, filename, reliability, tc_netem, sliding_
 
 
 # Description:
-# This function runs the server
+#   This function runs the server
 # Parameters:
-# server_ip: The IP to bind the server to
-# server_port: The port to bind the server to
-# path: The path to save the file to
-# reliability: The reliability of the connection (stop_and_wait, gbn, sr)
-# tc_netem: The netem testcases to be run (duplicate, loss, reorder, skip_ack, skip_seq)
-# sliding_window: The sliding window size
-# skip_a_packet: The packet to be skipped
+#   server_ip: The IP to bind the server to
+#    server_port: The port to bind the server to
+#   path: The path to save the file to
+#   reliability: The reliability of the connection (stop_and_wait, gbn, sr)
+#   tc_netem: The netem testcases to be run (duplicate, loss, reorder, skip_ack, skip_seq)
+#   sliding_window: The sliding window size
+#   skip_a_packet: The packet to be skipped
 # Returns:
-# None
+#   None
 def run_server(server_ip, server_port, path, reliability, tc_netem, sliding_window, skip_a_packet=None):
     # Create the testcases if they are specified
     if tc_netem is not None:
@@ -970,7 +964,7 @@ def run_server(server_ip, server_port, path, reliability, tc_netem, sliding_wind
                 acknowledgment_number = sequence_number + 1
                 # Random Initial Sequence Number
                 sequence_number = random_isn()
-                # sequence_number = 0
+
                 # Save the sequence number
                 sequence_number_prev = sequence_number
                 # Flags for syn and ack
@@ -1054,16 +1048,16 @@ def run_server(server_ip, server_port, path, reliability, tc_netem, sliding_wind
 
 
 # Description:
-# Main function of the program, parses the arguments and calls the run_server or run_client function
+#   Main function of the program, parses the arguments and calls the run_server or run_client function
 # Parameters:
 #   None
 # Returns:
 #   None
 def main():
     # Description:
-    # Checks is the input is a positive integer, raises an error if it's not.
+    #   Checks is the input is a positive integer, raises an error if it's not.
     # Parameters:
-    # integer: holds the integer to check
+    #    integer: holds the integer to check
     # Returns:
     #   Returns the integer if valid, else it will exit the program with an error message
     # Taken from portfolio 1
@@ -1162,7 +1156,7 @@ def main():
 
         # Remove the last dot
         ip = ip[:-1]
-        return ip
+        return ip  # Return the ip
 
     # Description:
     #   Checks if a path exists
