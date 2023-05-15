@@ -4,18 +4,21 @@
 
 ### Prerequisites
 
-To run our code applications.py, you'll need **`python33** installed on your system. In order to use it in the mininet
+To run our code applications.py, you'll need **python3** installed on your system. In order to use it in the mininet
 topology, you'll need to run the **simple_topo.py** code in Ubuntu `22.04/20.04/18.04`.
 
 Once you are in Ubuntu, make sure to open the terminal and install mininet:
 
 `sudo apt-get install mininet`
 
-If necessary, make sure to also install openvswitch:
+If necessary, make sure to also install openvswitch, and Linux traffic control NetEm utility. It might be necessary to
+run a `sudo apt-get update` before installing the packages :
 
 `sudo apt-get install openvswitch-switch`
 
 `sudo service openvswitch-switch start`
+
+`sudo apt-get install iproute2` # for the NetEm utility
 
 For our implementation, we are going to communicate with network devices with the help of xterm, so make sure to install
 it:
@@ -84,9 +87,11 @@ Usage `python3 application.py -c -f filename.txt`
 Usage `python3 application.py -h`
 
 -i, --ip IP address to connect/bind to, in dotted decimal notation. Default 127.0.0.1
+
 * Usage `python3 application.py -i 127.0.0.1`
 
 -p, --port Port to use, default 8088
+
 * Usage `python3 application.py -p 8080`
 
 -r, --reliability {stop_and_wait,gbn,sr}
@@ -141,7 +146,7 @@ The flags can be used in any order.
 If the save folder does not exist, it will be created. If the program is run as root (in mininet),the file owner will be
 root and the permissions will be set to 777. If the file already exists, it will be overwritten.
 
-If a packet is lost during the handshake or the two way closing handshake with the netemflags set, the program will
+If a packet is lost during the handshake or the two way closing handshake with the netem flags set, the program will
 hang. Try running the program again.
 
 
